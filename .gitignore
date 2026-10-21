@@ -1,0 +1,19 @@
+# Build outputs and archived original tools
+/dist/
+/工具/
+/build/
+/out/
+/.vs/
+*.obj
+*.pdb
+*.ilk
+*.user
+# Local investigation notes and machine-specific diagnostics
+/*-log.txt
+/*-test.txt
+/findings.md
+/progress.md
+/task_plan.md
+/scripts/watch-toolbox.ps1
+/scripts/update-alarm.ps1
+/scripts/probe-input.ps1

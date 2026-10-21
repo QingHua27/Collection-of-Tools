@@ -1,0 +1,5 @@
+#pragma once
+
+#define IDI_APP_ICON 301
+#define IDD_POLL_INTERVAL 302
+#define IDC_POLL_INTERVAL_EDIT 1001

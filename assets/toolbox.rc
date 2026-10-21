@@ -1,0 +1,40 @@
+#pragma code_page(65001)
+#include <windows.h>
+1 ICON "toolbox.ico"
+201 ICON "tank.ico"
+202 ICON "tank-paused.ico"
+301 ICON "lol.ico"
+101 RCDATA "zh-CN.ini"
+102 RCDATA "en-US.ini"
+402 RCDATA "alarm.wav"
+302 DIALOGEX 0, 0, 238, 92
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "攻速刷新间隔"
+FONT 9, "Microsoft YaHei UI"
+BEGIN
+    LTEXT "请输入检测到游戏数据时的刷新间隔：", -1, 14, 14, 210, 12
+    EDITTEXT 1001, 14, 33, 104, 14, ES_AUTOHSCROLL | ES_NUMBER
+    LTEXT "毫秒（20–5000）", -1, 124, 35, 100, 12
+    DEFPUSHBUTTON "确定", IDOK, 70, 63, 46, 16
+    PUSHBUTTON "取消", IDCANCEL, 124, 63, 46, 16
+END
+1 VERSIONINFO
+ FILEVERSION 1,0,0,0
+ PRODUCTVERSION 1,0,0,0
+ FILEOS VOS_NT_WINDOWS32
+ FILETYPE VFT_APP
+BEGIN
+ BLOCK "StringFileInfo"
+ BEGIN
+  BLOCK "080404b0"
+  BEGIN
+   VALUE "FileDescription", "C++ 六合一工具箱\0"
+   VALUE "ProductName", "工具箱\0"
+   VALUE "FileVersion", "1.0.0\0"
+  END
+ END
+ BLOCK "VarFileInfo"
+ BEGIN
+  VALUE "Translation", 0x804, 1200
+ END
+END
