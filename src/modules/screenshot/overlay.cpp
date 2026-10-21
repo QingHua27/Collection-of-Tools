@@ -6,6 +6,7 @@
 #include <imm.h>
 #include <memory>
 #include <mutex>
+#include <commctrl.h>
 
 #pragma comment(lib, "imm32.lib")
 
@@ -58,6 +59,7 @@ struct JobMsg {
 };
 
 Overlay::~Overlay() {
+    if(panelTextFont)DeleteObject(panelTextFont);
     free_shot(shot);
     delete mosaic;
     mosaic = nullptr;
@@ -692,6 +694,39 @@ static const wchar_t* panel_current_text(const Overlay* o) {
     return o->panelBody.c_str();
 }
 
+static LRESULT CALLBACK panel_text_proc(HWND h,UINT m,WPARAM w,LPARAM l,UINT_PTR,DWORD_PTR) {
+    if(m==WM_KEYDOWN && w=='A' && (GetKeyState(VK_CONTROL)&0x8000)) {SendMessageW(h,EM_SETSEL,0,-1);return 0;}
+    if(m==WM_NCDESTROY)RemoveWindowSubclass(h,panel_text_proc,8101);
+    return DefSubclassProc(h,m,w,l);
+}
+// Native read-only text preserves character selection, keyboard copying and scrolling.
+static void sync_panel_text(Overlay* o) {
+    if(o->panel!=PM_TEXT) {if(o->panelText)ShowWindow(o->panelText,SW_HIDE);return;}
+    if(!o->panelText) {
+        o->panelText=CreateWindowExW(0,L"EDIT",L"",WS_CHILD|WS_VSCROLL|ES_MULTILINE|ES_AUTOVSCROLL|ES_READONLY|ES_NOHIDESEL,0,0,1,1,o->hwnd,(HMENU)8101,GetModuleHandleW(nullptr),nullptr);
+        SetWindowSubclass(o->panelText,panel_text_proc,8101,0);
+        o->panelTextFont=CreateFontW(-(int)SF(14),0,0,0,FW_NORMAL,0,0,0,DEFAULT_CHARSET,0,0,CLEARTYPE_QUALITY,0,FONT_UI());
+        SendMessageW(o->panelText,WM_SETFONT,(WPARAM)o->panelTextFont,FALSE);
+        SendMessageW(o->panelText,EM_SETLIMITTEXT,0,0);
+    }
+    std::wstring text=panel_current_text(o);
+    if(text!=o->displayedPanelText) {SetWindowTextW(o->panelText,text.c_str());o->displayedPanelText=text;}
+    RectF body;panel_body_rect(o,body);RECT current{};GetWindowRect(o->panelText,&current);MapWindowPoints(nullptr,o->hwnd,(POINT*)&current,2);
+    if(current.left!=(int)body.X || current.top!=(int)body.Y || current.right-current.left!=(int)body.Width || current.bottom-current.top!=(int)body.Height)
+        MoveWindow(o->panelText,(int)body.X,(int)body.Y,(int)body.Width,(int)body.Height,TRUE);
+    if(!IsWindowVisible(o->panelText))ShowWindow(o->panelText,SW_SHOW);
+}
+
+bool overlay_selection_self_test() {
+    Overlay o;o.hwnd=CreateWindowExW(0,L"STATIC",L"",WS_POPUP,0,0,500,400,nullptr,nullptr,GetModuleHandleW(nullptr),nullptr);
+    o.panel=PM_TEXT;o.panelRect=RectF(0,0,450,300);o.panelBody=L"第一行文字\r\n第二行文字";
+    sync_panel_text(&o);SendMessageW(o.panelText,EM_SETSEL,1,4);DWORD start=0,end=0;SendMessageW(o.panelText,EM_GETSEL,(WPARAM)&start,(LPARAM)&end);
+    bool ok=start==1 && end==4 && (GetWindowLongPtrW(o.panelText,GWL_STYLE)&ES_READONLY);
+    o.panelOriginal=L"原文";o.showOriginal=true;sync_panel_text(&o);wchar_t text[32]{};GetWindowTextW(o.panelText,text,32);ok=ok && wcscmp(text,L"原文")==0;
+    o.panel=PM_HIDDEN;sync_panel_text(&o);ok=ok && !(GetWindowLongPtrW(o.panelText,GWL_STYLE)&WS_VISIBLE);
+    DestroyWindow(o.hwnd);return ok;
+}
+
 static void draw_panel(Graphics& g, Overlay* o) {
     if (o->panel == PM_HIDDEN) return;
     const RectF& r = o->panelRect;
@@ -728,7 +763,7 @@ static void draw_panel(Graphics& g, Overlay* o) {
         SolidBrush red(Color(255, 220, 60, 60));
         g.DrawString(o->panelBody.c_str(), -1, &f,
                      RectF(body.X, body.Y, body.Width, body.Height + SF(400.0f)), nullptr, &red);
-    } else {
+    } else if (!o->panelText) {
         Font f(FONT_UI(), SF(14.0f), FontStyleRegular, UnitPixel);
         SolidBrush fg(Color(255, 51, 51, 51));
         RectF layout(body.X, body.Y - o->panelScroll, body.Width, body.Height + SF(4000.0f));
@@ -737,7 +772,7 @@ static void draw_panel(Graphics& g, Overlay* o) {
     g.Restore(st);
 
     // 滚动条
-    if (o->panel == PM_TEXT) {
+    if (o->panel == PM_TEXT && !o->panelText) {
         Font f(FONT_UI(), SF(14.0f), FontStyleRegular, UnitPixel);
         RectF measure;
         StringFormat fmt;
@@ -1505,11 +1540,15 @@ static LRESULT CALLBACK ov_proc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
         ImmAssociateContext(h, nullptr);
         return 0;
 
+    case WM_CTLCOLORSTATIC:
+    case WM_CTLCOLOREDIT:
+        if(o && (HWND)lp==o->panelText) {SetTextColor((HDC)wp,RGB(51,51,51));SetBkColor((HDC)wp,RGB(252,252,252));static HBRUSH brush=CreateSolidBrush(RGB(252,252,252));return (LRESULT)brush;}
+        break;
     case WM_ERASEBKGND:
         return 1;
 
     case WM_PAINT:
-        if (o) paint(o);
+        if (o) {sync_panel_text(o);paint(o);}
         return 0;
 
     case WM_CHAR: {
@@ -1985,7 +2024,7 @@ bool overlay_open() {
     g_ov = o;
 
     HWND hwnd = CreateWindowExW(WS_EX_TOPMOST | WS_EX_TOOLWINDOW, OV_CLASS, L"简截",
-                                WS_POPUP, o->shot.vx, o->shot.vy, o->shot.vw, o->shot.vh,
+                                WS_POPUP | WS_CLIPCHILDREN, o->shot.vx, o->shot.vy, o->shot.vw, o->shot.vh,
                                 nullptr, nullptr, GetModuleHandleW(nullptr), o.get());
     if (!hwnd) {
         g_ov.reset();

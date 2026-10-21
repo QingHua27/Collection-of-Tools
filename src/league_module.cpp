@@ -1,4 +1,5 @@
 #include "gateway.h"
+#include "theme.h"
 static BOOL LeagueMessage(LPMSG, HWND, UINT, UINT);
 #define wWinMain LeagueEntry
 #define WndProc LeagueWindowProc

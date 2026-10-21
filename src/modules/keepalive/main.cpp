@@ -163,7 +163,6 @@ void ShowMenu() {
     HMENU modes = CreatePopupMenu(); const auto mode = startup->Read();
     AppendMenuW(modes, MF_STRING | (mode == tank::StartupMode::Disabled ? MF_CHECKED : 0), kStartupNone, L"不自动启动");
     AppendMenuW(modes, MF_STRING | (mode == tank::StartupMode::Windows ? MF_CHECKED : 0), kStartupWindows, L"登录 Windows 后启动");
-    AppendMenuW(modes, MF_STRING | (mode == tank::StartupMode::FollowQQ ? MF_CHECKED : 0), kStartupQQ, L"跟随 QQ 游戏（后台等待）");
     if (mode == tank::StartupMode::Unrecognized) AppendMenuW(modes, MF_STRING | MF_DISABLED, 0, L"启动项位于其他位置或无法读取");
     AppendMenuW(menu, MF_POPUP, reinterpret_cast<UINT_PTR>(modes), L"自动启动");
     AppendMenuW(menu, MF_SEPARATOR, 0, nullptr); AppendMenuW(menu, MF_STRING, kExit, L"退出助手");
@@ -204,7 +203,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM w, LPARAM l) {
         case kExit: DestroyWindow(hwnd); break;
         case kStartupNone: StartupChoice(tank::StartupMode::Disabled); break;
         case kStartupWindows: StartupChoice(tank::StartupMode::Windows); break;
-        case kStartupQQ: StartupChoice(tank::StartupMode::FollowQQ); break;
         }
         return 0;
     case kTrayMessage:

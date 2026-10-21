@@ -11,6 +11,7 @@ namespace toolbox {
 enum Module : int { Screenshot, Recording, Countdown, KeepAlive, League, AceOptimizer, Count };
 enum Action : int { Refresh, Primary, Secondary, Configure, Stop, TestCountdown, TestRecording, TestRecordingStop, IoOption, MemoryOption, HotkeyFirst=100 };
 extern std::atomic<int> screenshotPreset;
+extern std::atomic<bool> screenshotSelectionVerified;
 const wchar_t* ScreenshotPresetName(int index);
 constexpr UINT WM_HOST_CALL = WM_APP + 0x615;
 extern HWND host;

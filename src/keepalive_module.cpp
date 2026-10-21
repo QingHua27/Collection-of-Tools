@@ -12,15 +12,9 @@ static void KeepAliveAction(toolbox::Action action) {
     using namespace toolbox;
     if (action == Primary) TogglePause();
     if (action == Secondary) Cycle(!paused);
-    if (action == Configure) {
-        watchQQ = !watchQQ; nextWatch=0;
-        WritePrivateProfileStringW(L"modules", L"keepalive_follow_qq", watchQQ ? L"1" : L"0",
-            (DataDir() + L"\\toolbox.ini").c_str());
-    }
     if (action == Refresh || action == Primary || action == Secondary) {
         std::wstring text = paused ? L"已暂停" : L"后台保活已开启";
         text += L" · " + std::to_wstring(targets.size()) + L" 个游戏页面\r\n每 30 秒发送后台移动消息，不移动真实鼠标。";
-        text += watchQQ ? L"\r\n跟随 QQ 游戏：已开启（无客户端时后台等待）" : L"\r\n跟随 QQ 游戏：已关闭";
         text += L"\r\n\r\n最近发送：" + lastPulse;
         unsigned index = 0;
         for (auto& target : targets) {
@@ -40,8 +34,9 @@ static BOOL KeepAliveMessage(LPMSG msg, HWND h, UINT low, UINT high) {
 }
 void toolbox::RunKeepAlive() {
     running = true; paused = false; counts.clear();
-    watchQQ = GetPrivateProfileIntW(L"modules",L"keepalive_follow_qq",0,
-        (DataDir()+L"\\toolbox.ini").c_str()) != 0;
+    watchQQ = false; qqPresent = true;
+    WritePrivateProfileStringW(L"modules",L"keepalive_follow_qq",nullptr,
+        (DataDir()+L"\\toolbox.ini").c_str());
     KeepAliveEntry(GetModuleHandleW(nullptr), nullptr, nullptr, SW_HIDE);
     UnregisterClassW(kWindowClass, GetModuleHandleW(nullptr));
 }

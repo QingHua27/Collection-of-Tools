@@ -1,5 +1,6 @@
 // player.cpp - MFPlay 播放窗口
 #include "player.h"
+#include "../../gateway.h"
 
 #include <mfapi.h>
 #include <mfplay.h>
@@ -242,7 +243,7 @@ bool Player::Open(HINSTANCE inst, const std::wstring& path, I18n* i18n) {
     g_wnd = CreateWindowExW(0, kPlayerClass, g_title.c_str(),
                             WS_OVERLAPPEDWINDOW,
                             (sw - ww) / 2, (sh - wh) / 2, ww, wh,
-                            nullptr, nullptr, inst, nullptr);
+                            toolbox::host, nullptr, inst, nullptr);
     if (!g_wnd) return false;
 
     RECT rc; GetClientRect(g_wnd, &rc);
@@ -276,6 +277,13 @@ bool Player::Open(HINSTANCE inst, const std::wstring& path, I18n* i18n) {
     g_duration = ProbeDuration(path);
 
     ShowWindow(g_wnd, SW_SHOW);
+    // Activate on the host's input thread: playback is opened by the recorder worker.
+    toolbox::OnHost([] {
+        if (!IsWindow(g_wnd)) return;
+        ShowWindow(g_wnd, SW_RESTORE);
+        SetWindowPos(g_wnd, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+        SetForegroundWindow(g_wnd);
+    });
     Layout();
     SetTimer(g_wnd, ID_TIMER, 200, nullptr);
 

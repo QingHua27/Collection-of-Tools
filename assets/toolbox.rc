@@ -7,6 +7,9 @@
 101 RCDATA "zh-CN.ini"
 102 RCDATA "en-US.ini"
 402 RCDATA "alarm.wav"
+405 WAVE "record-shutter.wav"
+403 RCDATA "lol-helper.lua"
+404 RCDATA "botanical-paper-reference.png"
 302 DIALOGEX 0, 0, 238, 92
 STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "攻速刷新间隔"

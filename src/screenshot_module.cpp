@@ -1,4 +1,5 @@
 #include "gateway.h"
+#include "theme.h"
 static BOOL ScreenshotMessage(LPMSG, HWND, UINT, UINT);
 #define wWinMain ScreenshotEntry
 #define GetMessageW ScreenshotMessage
@@ -8,12 +9,13 @@ static BOOL ScreenshotMessage(LPMSG, HWND, UINT, UINT);
 #undef GetMessageW
 #undef wWinMain
 std::atomic<int> toolbox::screenshotPreset{0};
+std::atomic<bool> toolbox::screenshotSelectionVerified{false};
 const wchar_t* toolbox::ScreenshotPresetName(int index) { return HOTKEY_PRESETS[index].name; }
 
 static void ScreenshotAction(toolbox::Action action) {
     using namespace toolbox;
     if (action == Primary) overlay_open();
-    if (action == Configure) show_settings_dialog(g_msgwnd);
+    if (action == Configure) {if(testMode)screenshotSelectionVerified=overlay_selection_self_test();show_settings_dialog(toolbox::host);}
     int chosen=static_cast<int>(action)-static_cast<int>(HotkeyFirst);
     if(chosen>=0 && chosen<N_HOTKEY_PRESETS) {
         UINT oldMods=g_hotMods, oldVk=g_hotVk;

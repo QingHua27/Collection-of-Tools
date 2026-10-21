@@ -121,16 +121,16 @@ static long long g_lastTipSec = -1;     // 上次写入托盘提示的秒数
 static bool  g_quitting = false;        // 真正退出标志
 
 // 颜色
-static const COLORREF C_BG      = RGB(255, 255, 255);
-static const COLORREF C_TEXT    = RGB(32, 34, 40);
-static const COLORREF C_MUTED   = RGB(150, 155, 165);
-static const COLORREF C_ACCENT  = RGB(0, 122, 204);
+static const COLORREF C_BG      = RGB(253, 252, 246);
+static const COLORREF C_TEXT    = RGB(37, 62, 44);
+static const COLORREF C_MUTED   = RGB(111, 123, 101);
+static const COLORREF C_ACCENT  = RGB(67, 103, 63);
 static const COLORREF C_PAUSE   = RGB(230, 140, 20);
 static const COLORREF C_DANGER  = RGB(214, 48, 49);
 static const COLORREF C_TRACK   = RGB(236, 238, 242);
 static const COLORREF C_GREEN   = RGB(38, 160, 90);
 
-static int S(int v) { return MulDiv(v, g_dpi, 96); }
+static int S(int v) { return MulDiv(v, g_dpi*75, 9600); }
 
 // 前置声明
 static void startCountdown();
@@ -415,7 +415,7 @@ static HICON createAppIcon(int size) {
     memset(bits, 0, (size_t)size * (size_t)size * 4);
 
     // 圆角方形底 + 表盘
-    HBRUSH br = CreateSolidBrush(RGB(0, 122, 204));
+    HBRUSH br = CreateSolidBrush(RGB(67, 103, 63));
     HPEN   np = CreatePen(PS_NULL, 0, RGB(0, 0, 0));
     HGDIOBJ ob = SelectObject(hdc, br);
     HGDIOBJ op = SelectObject(hdc, np);
@@ -423,7 +423,7 @@ static HICON createAppIcon(int size) {
 
     // 指针
     int thick = (size >= 32) ? 3 : 2;
-    HPEN wp = CreatePen(PS_SOLID, thick, RGB(255, 255, 255));
+    HPEN wp = CreatePen(PS_SOLID, thick, RGB(253, 252, 246));
     HGDIOBJ ow = SelectObject(hdc, wp);
     int cx = size / 2, cy = size / 2;
     MoveToEx(hdc, cx, cy, nullptr);

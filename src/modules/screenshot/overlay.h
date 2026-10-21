@@ -61,6 +61,9 @@ struct Overlay {
     bool tbVisible = false;
 
     // 结果面板
+    HWND panelText = nullptr;
+    HFONT panelTextFont = nullptr;
+    std::wstring displayedPanelText;
     int panel = PM_HIDDEN;
     std::wstring panelTitle, panelBody, panelHint, panelOriginal;
     bool showOriginal = false;
@@ -80,3 +83,5 @@ void overlay_destroy();
 
 // 供托盘/主程序调用
 void overlay_request_capture();
+
+bool overlay_selection_self_test();

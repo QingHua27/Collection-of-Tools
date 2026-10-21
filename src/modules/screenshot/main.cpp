@@ -368,9 +368,7 @@ void show_settings_dialog(HWND owner) {
         return TRUE;
     }, (LPARAM)font);
 
-    ShowWindow(dlg, SW_SHOW);
-    SetForegroundWindow(dlg);
-    SetActiveWindow(dlg);
+    toolbox::theme::Dialog(dlg,owner);
     if (owner) EnableWindow(owner, FALSE);
 
     MSG msg{};

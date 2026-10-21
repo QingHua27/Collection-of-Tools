@@ -803,6 +803,7 @@ INT_PTR CALLBACK PollIntervalDialogProc(HWND dialog, UINT message, WPARAM wParam
         HWND edit = GetDlgItem(dialog, IDC_POLL_INTERVAL_EDIT);
         SendMessageW(edit, EM_SETLIMITTEXT, 4, 0);
         SendMessageW(edit, EM_SETSEL, 0, -1);
+        toolbox::theme::Dialog(dialog,toolbox::host);
         return TRUE;
     }
 
@@ -838,7 +839,7 @@ void ConfigureAttackSpeedPollInterval() {
     PollIntervalDialogData data{g_attackSpeedExporter.GetConnectedPollInterval()};
     const INT_PTR result = DialogBoxParamW(GetModuleHandleW(nullptr),
                                            MAKEINTRESOURCEW(IDD_POLL_INTERVAL),
-                                           nullptr, PollIntervalDialogProc,
+                                           toolbox::host, PollIntervalDialogProc,
                                            reinterpret_cast<LPARAM>(&data));
     if (result == IDCANCEL) return;
     if (result != IDOK) {

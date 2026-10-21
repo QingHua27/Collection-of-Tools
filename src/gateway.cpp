@@ -58,8 +58,8 @@ void Publish(Module id, HWND window, bool dock) {
         int x=0, y=0, width=client.right, height=client.bottom;
         if (id==Countdown) {
             UINT dpi=GetDpiForWindow(pages[id]);
-            width=MulDiv(520,dpi,96); height=MulDiv(444,dpi,96);
-            x=(client.right-width)/2; y=MulDiv(24,dpi,96);
+            width=MulDiv(390,dpi,96); height=MulDiv(333,dpi,96);
+            x=(client.right-width)/2; y=std::max(0,(static_cast<int>(client.bottom)-height)/2);
         }
         SetWindowPos(window, nullptr, x, y, width, height,
             SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED | SWP_SHOWWINDOW);

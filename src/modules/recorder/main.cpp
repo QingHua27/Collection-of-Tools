@@ -7,6 +7,7 @@
 
 #include <windows.h>
 #include <windowsx.h>
+#include <mmsystem.h>
 #include <commctrl.h>
 #include <mfapi.h>
 #include <shlobj.h>
@@ -128,7 +129,7 @@ static int  g_barDragX = 0, g_barDragY = 0;
 static bool g_barDragging = false;
 static std::wstring g_barTime = L"00:00";
 
-static int S(int v) { return MulDiv(v, (int)g_dpi, 96); }
+static int S(int v) { return MulDiv(v, (int)g_dpi*70, 9600); }
 
 // ---------------- 区域框选 ----------------
 namespace {
@@ -604,9 +605,9 @@ void SizeListColumns() {
     RECT lr = {};
     if (!GetClientRect(g_list, &lr) || lr.right <= 0) return;
     const int avail = lr.right - S(6);          // 给竖向滚动条留一点
-    int wName = avail * 56 / 100;
-    int wDur  = avail * 20 / 100;
-    int wSize = avail - wName - wDur;
+    int wDur=MulDiv(52,g_dpi,96);
+    int wSize=MulDiv(64,g_dpi,96);
+    int wName=avail-wDur-wSize;
     if (wName < S(60)) wName = S(60);
     SendMessageW(g_list, LVM_SETCOLUMNWIDTH, 0, wName);
     SendMessageW(g_list, LVM_SETCOLUMNWIDTH, 1, wDur);
@@ -649,7 +650,8 @@ void RefreshHistoryList() {
         LVITEMW lv = {};
         lv.mask = LVIF_TEXT;
         lv.iItem = (int)i;
-        lv.pszText = (LPWSTR)it.name.c_str();
+        std::wstring title=L"▶   "+it.name;
+        lv.pszText = title.data();
         int row = (int)SendMessageW(g_list, LVM_INSERTITEMW, 0, (LPARAM)&lv);
 
         std::wstring dur = it.durationMs<0?L"—":FormatDuration(it.durationMs);
@@ -942,8 +944,8 @@ void Retranslate() {
     SetWindowTextW(g_lblFps, g_i18n.T("fps").c_str());
     SetWindowTextW(g_lblQuality, g_i18n.T("quality").c_str());
     SetWindowTextW(g_lblEncoder, g_i18n.T("encoder").c_str());
-    SetWindowTextW(g_chkSystemAudio, g_i18n.T("audio_system").c_str());
-    SetWindowTextW(g_chkMicrophone, g_i18n.T("audio_microphone").c_str());
+    SetWindowTextW(g_chkSystemAudio, L"系统声音");
+    SetWindowTextW(g_chkMicrophone, L"麦克风");
     SetWindowTextW(g_lblLang, g_i18n.T("language").c_str());
     SetWindowTextW(g_lblDir, g_i18n.T("output_dir").c_str());
     SetWindowTextW(g_lblHotkey, g_i18n.T("hotkey").c_str());
@@ -999,15 +1001,16 @@ int LayoutMain(bool fromResize) {
     RECT rc;
     GetClientRect(g_main, &rc);
     const int W = rc.right;
-    const int pad = S(12);
-    const int rowH = S(26);
-    const int gap = S(8);
-    const int lw = S(52);                 // 左栏标签列
+    g_colW=std::max(S(390),W*44/100);
+    const int pad = S(20);
+    const int rowH = S(38);
+    const int gap = S(14);
+    const int lw = S(96);                 // 左栏标签列
     const int fx = pad + lw;
     const int colContentW = g_colW - pad * 2;
     const int fw = colContentW - lw;      // 左栏控件宽度
     const int hintH = S(34);              // 提示两行
-    int y = S(12);
+    int y = S(78);
 
     auto place = [&](HWND c, int x, int yy, int w, int h) {
         MoveWindow(c, x, yy, w, h, TRUE);
@@ -1053,29 +1056,24 @@ int LayoutMain(bool fromResize) {
     // ---- 输出目录 / 快捷键 ----
     // 这两行把「浏览…/设置…」放到标签行右侧，编辑框就能占满整行 ——
     // 宽度减半之后，路径框再被按钮挤掉 60px 就什么都看不见了。
-    const int smW = S(58), smH = S(22);
-    place(g_lblDir, pad, y, lw + S(70), S(20));
-    place(g_btnBrowse, pad + colContentW - smW, y, smW, smH);
-    y += S(24);
-    place(g_edtDir, pad, y, colContentW, rowH);
-    y += rowH + gap + S(2);
-
-    place(g_lblHotkey, pad, y, lw + S(70), S(20));
-    place(g_btnHotkey, pad + colContentW - smW, y, smW, smH);
-    y += S(24);
-    // 用 ES_READONLY 而不是禁用：禁用会变灰，看着像功能坏了
-    place(g_edtHotkey, pad, y, colContentW, rowH);
-    y += rowH + gap + S(4);
-
+    const int smW=S(86);
+    place(g_lblDir,pad,y+S(6),lw,rowH);
+    place(g_edtDir,fx,y,fw-smW-gap,rowH);
+    place(g_btnBrowse,fx+fw-smW,y,smW,rowH);
+    y+=rowH+gap;
+    place(g_lblHotkey,pad,y+S(6),lw,rowH);
+    place(g_edtHotkey,fx,y,fw-smW-gap,rowH);
+    place(g_btnHotkey,fx+fw-smW,y,smW,rowH);
+    y+=rowH+S(22);
     // ---- 录制 / 悬浮窗 ----
-    const int floatW = S(76);
-    place(g_btnRecord, pad, y, colContentW - floatW - gap, S(38));
-    place(g_btnFloat, pad + colContentW - floatW, y, floatW, S(38));
-    y += S(38) + S(12);
+    const int floatW = colContentW*40/100;
+    place(g_btnRecord, pad, y, colContentW - floatW - gap, S(68));
+    place(g_btnFloat, pad + colContentW - floatW, y, floatW, S(68));
+    y += S(68) + S(22);
 
     // ---- 录制记录的开关（留在左栏底部，位置固定，不跟着展开状态跳来跳去）----
-    place(g_lblHist, pad, y, colContentW, S(22));
-    y += S(24);
+    place(g_lblHist, pad, y, colContentW, S(44));
+    y += S(48);
     const int leftNeed = y + pad;
 
     // 双保险：v6 下让下拉列表至少显示 12 项（v5 会失败，靠上面的高度兜底）
@@ -1090,9 +1088,9 @@ int LayoutMain(bool fromResize) {
     if (g_histOpen) {
         ShowWindow(g_list, SW_SHOW);
         ShowWindow(g_lblHint, SW_SHOW);
-        const int rightX = pad + colContentW + S(14);
+        const int rightX = g_colW + S(20);
         const int rightW = W - rightX - pad;
-        const int top = S(12);
+        const int top = S(78);
 
         int listH = g_listH;
         if (fromResize) {
@@ -1298,7 +1296,7 @@ void OnRecEvent(WPARAM wp, LPARAM lp) {
             SetMainTitle(g_rec.LastHardware() ? g_i18n.T("enc_gpu").c_str()
                                               : g_i18n.T("enc_cpu").c_str());
             UpdateRecordButton();
-            NotifyUser(g_i18n.T("notify_started"), g_i18n.T("notify_started_body"), MB_OK);
+            NotifyUser(g_i18n.T("notify_started"), g_i18n.T("notify_started_body"), -2);
         }
         break;
     case WM_REC_DONE: {
@@ -1314,7 +1312,7 @@ void OnRecEvent(WPARAM wp, LPARAM lp) {
         const bool copied = it.bytes > 0 && CopyVideoFiles(g_main, {it.path});
         NotifyUser(g_i18n.T("notify_finished"),
                    it.name + L"\n" + g_i18n.T(copied ? "notify_video_copied" : "notify_video_copy_failed"),
-                   MB_ICONASTERISK, !copied);
+                   -2, !copied);
         g_barTime = L"00:00";
         g_encShown = false;
         SetMainTitle();
@@ -1485,7 +1483,10 @@ bool EnsureTrayIcon() {
 
 void NotifyUser(const std::wstring& title, const std::wstring& detail, int sound, bool warning) {
     if (g_exiting) return;
-    if (sound >= 0) MessageBeep((UINT)sound);
+    if(!toolbox::testMode) {
+        if(sound==-2) PlaySoundW(MAKEINTRESOURCEW(405),g_inst,SND_RESOURCE|SND_ASYNC|SND_NODEFAULT);
+        else if(sound>=0) MessageBeep((UINT)sound);
+    }
     if (!EnsureTrayIcon()) return;
     NOTIFYICONDATAW icon = {};
     icon.cbSize = sizeof(icon); icon.hWnd = g_main; icon.uID = 1;
@@ -1889,6 +1890,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, LPWSTR, int) {
         if (g_dpi < 72 || g_dpi > 480) g_dpi = 96;
     }
 
+    toolbox::OnHost([&] {
     CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
     MFStartup(MF_VERSION, MFSTARTUP_NOSOCKET);
 
@@ -1910,7 +1912,8 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, LPWSTR, int) {
     NONCLIENTMETRICSW ncm = { sizeof(ncm) };
     SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0);
     LOGFONTW lf = ncm.lfMessageFont;
-    lf.lfHeight = -MulDiv(lf.lfHeight < 0 ? -lf.lfHeight : 12, g_dpi, 96);
+    lf.lfHeight = -S(18);
+    wcscpy_s(lf.lfFaceName,L"Microsoft YaHei UI");
     g_font = CreateFontIndirectW(&lf);
     LOGFONTW lfb = lf;
     lfb.lfWeight = FW_SEMIBOLD;
@@ -2000,8 +2003,10 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, LPWSTR, int) {
     SendMessageW(g_btnRecord, WM_SETFONT, (WPARAM)g_fontBold, TRUE);
     SendMessageW(g_lblHist, WM_SETFONT, (WPARAM)g_fontBold, TRUE);
 
+    // Exclude the child header from double-buffered list painting; otherwise
+    // the themed header and list continuously repaint over each other.
     g_list = CreateWindowExW(WS_EX_CLIENTEDGE, WC_LISTVIEWW, L"",
-        WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_SHOWSELALWAYS,
+        WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS | LVS_REPORT | LVS_SHOWSELALWAYS,
         0, 0, 10, 10, g_main, (HMENU)(INT_PTR)IDC_LIST, inst, nullptr);
     SendMessageW(g_list, WM_SETFONT, (WPARAM)g_font, TRUE);
     ListView_SetExtendedListViewStyle(g_list, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
@@ -2070,6 +2075,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, LPWSTR, int) {
     }
     UpdateHotkeyText();
 
+    });
     MSG msg;
     while (GetMessageW(&msg, nullptr, 0, 0)) {
         if (Player::IsOpen() && msg.hwnd == nullptr) { /* no-op */ }
@@ -2077,9 +2083,11 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, LPWSTR, int) {
         DispatchMessageW(&msg);
     }
 
+    toolbox::OnHost([&] {
     if (g_font) DeleteObject(g_font);
     if (g_fontBold) DeleteObject(g_fontBold);
     MFShutdown();
     CoUninitialize();
+    });
     return 0;
 }

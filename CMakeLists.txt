@@ -10,9 +10,9 @@ set(R src/modules/recorder)
 set(K src/modules/keepalive)
 set(L src/modules/lol)
 set_property(SOURCE assets/toolbox.rc PROPERTY OBJECT_DEPENDS
-  "${CMAKE_CURRENT_SOURCE_DIR}/assets/toolbox.ico;${CMAKE_CURRENT_SOURCE_DIR}/assets/tank.ico;${CMAKE_CURRENT_SOURCE_DIR}/assets/tank-paused.ico;${CMAKE_CURRENT_SOURCE_DIR}/assets/lol.ico;${CMAKE_CURRENT_SOURCE_DIR}/assets/zh-CN.ini;${CMAKE_CURRENT_SOURCE_DIR}/assets/en-US.ini;${CMAKE_CURRENT_SOURCE_DIR}/assets/alarm.wav")
+  "${CMAKE_CURRENT_SOURCE_DIR}/assets/toolbox.ico;${CMAKE_CURRENT_SOURCE_DIR}/assets/tank.ico;${CMAKE_CURRENT_SOURCE_DIR}/assets/tank-paused.ico;${CMAKE_CURRENT_SOURCE_DIR}/assets/lol.ico;${CMAKE_CURRENT_SOURCE_DIR}/assets/zh-CN.ini;${CMAKE_CURRENT_SOURCE_DIR}/assets/en-US.ini;${CMAKE_CURRENT_SOURCE_DIR}/assets/alarm.wav;${CMAKE_CURRENT_SOURCE_DIR}/assets/record-shutter.wav;${CMAKE_CURRENT_SOURCE_DIR}/assets/lol-helper.lua;${CMAKE_CURRENT_SOURCE_DIR}/assets/botanical-paper-reference.png")
 add_executable(CppToolbox WIN32
-  src/main.cpp src/gateway.cpp src/ace.cpp src/ace_governor.cpp src/preview.cpp
+  src/main.cpp src/theme.cpp src/gateway.cpp src/ace.cpp src/ace_governor.cpp src/preview.cpp
   src/screenshot_module.cpp src/recording_module.cpp src/countdown_module.cpp
   src/keepalive_module.cpp src/league_module.cpp assets/toolbox.rc
   ${S}/common.cpp ${S}/capture.cpp ${S}/annotate.cpp ${S}/overlay.cpp ${S}/ocr.cpp
@@ -24,7 +24,7 @@ target_link_options(CppToolbox PRIVATE /MANIFEST:EMBED /MANIFESTUAC:level='asInv
 target_link_libraries(CppToolbox PRIVATE
   user32 gdi32 shell32 comdlg32 advapi32 gdiplus ole32 oleaut32 winhttp
   dwmapi shcore windowsapp d3d11 dxgi comctl32 shlwapi winmm
-  mfplay mfplat mfreadwrite mfuuid
+  mfplay mfplat mfreadwrite mfuuid uxtheme
 )
 include(CTest)
 if(BUILD_TESTING)
