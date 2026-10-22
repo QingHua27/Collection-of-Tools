@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(CppToolbox VERSION 1.1.0 LANGUAGES CXX RC)
+project(CppToolbox VERSION 1.2.0 LANGUAGES CXX RC)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
@@ -10,7 +10,7 @@ set(R src/modules/recorder)
 set(K src/modules/keepalive)
 set(L src/modules/lol)
 set_property(SOURCE assets/toolbox.rc PROPERTY OBJECT_DEPENDS
-  "${CMAKE_CURRENT_SOURCE_DIR}/assets/toolbox.ico;${CMAKE_CURRENT_SOURCE_DIR}/assets/tank.ico;${CMAKE_CURRENT_SOURCE_DIR}/assets/tank-paused.ico;${CMAKE_CURRENT_SOURCE_DIR}/assets/lol.ico;${CMAKE_CURRENT_SOURCE_DIR}/assets/zh-CN.ini;${CMAKE_CURRENT_SOURCE_DIR}/assets/en-US.ini;${CMAKE_CURRENT_SOURCE_DIR}/assets/alarm.wav;${CMAKE_CURRENT_SOURCE_DIR}/assets/record-shutter.wav;${CMAKE_CURRENT_SOURCE_DIR}/assets/lol-helper.lua;${CMAKE_CURRENT_SOURCE_DIR}/assets/botanical-paper-reference.png")
+  "${CMAKE_CURRENT_SOURCE_DIR}/assets/toolbox.ico;${CMAKE_CURRENT_SOURCE_DIR}/assets/tank.ico;${CMAKE_CURRENT_SOURCE_DIR}/assets/tank-paused.ico;${CMAKE_CURRENT_SOURCE_DIR}/assets/lol.ico;${CMAKE_CURRENT_SOURCE_DIR}/assets/zh-CN.ini;${CMAKE_CURRENT_SOURCE_DIR}/assets/en-US.ini;${CMAKE_CURRENT_SOURCE_DIR}/assets/alarm.wav;${CMAKE_CURRENT_SOURCE_DIR}/assets/record-shutter.wav;${CMAKE_CURRENT_SOURCE_DIR}/assets/lol-helper.lua;${CMAKE_CURRENT_SOURCE_DIR}/assets/botanical-timer-reference.png")
 add_executable(CppToolbox WIN32
   src/main.cpp src/theme.cpp src/gateway.cpp src/ace.cpp src/ace_governor.cpp src/preview.cpp
   src/screenshot_module.cpp src/recording_module.cpp src/countdown_module.cpp
@@ -28,6 +28,9 @@ target_link_libraries(CppToolbox PRIVATE
 )
 include(CTest)
 if(BUILD_TESTING)
+  add_executable(TranslationAuthTests tests/translation_auth_tests.cpp)
+  target_link_libraries(TranslationAuthTests PRIVATE winhttp user32 gdi32 gdiplus shell32 ole32)
+  add_test(NAME TranslationAuthTests COMMAND TranslationAuthTests)
   add_executable(AlarmTimeTests tests/alarm_time_tests.cpp)
   add_test(NAME AlarmTimeTests COMMAND AlarmTimeTests)
   add_executable(FolderVideoTests tests/folder_videos_tests.cpp ${R}/folder_videos.cpp)

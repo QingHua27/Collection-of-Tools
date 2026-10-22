@@ -32,7 +32,8 @@ static bool parse_url(const std::wstring& url, UrlParts& out) {
 
 static bool http_do(const std::wstring& url, const std::wstring& verb,
                     const std::string& body, const std::wstring& content_type,
-                    std::string& out, std::wstring& err) {
+                    std::string& out, std::wstring& err,
+                    const std::wstring& apiKey = L"") {
     out.clear();
     UrlParts u;
     if (!parse_url(url, u)) { err = L"地址无效"; return false; }
@@ -65,6 +66,8 @@ static bool http_do(const std::wstring& url, const std::wstring& verb,
                            L"AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36\r\n";
     if (!content_type.empty()) headers += L"Content-Type: " + content_type + L"\r\n";
 
+    if (!apiKey.empty()) headers += L"Authorization: Bearer " + apiKey + L"\r\n";
+
     BOOL ok = WinHttpSendRequest(req, headers.c_str(), (DWORD)-1L,
                                  body.empty() ? WINHTTP_NO_REQUEST_DATA : (LPVOID)body.data(),
                                  (DWORD)body.size(), (DWORD)body.size(), 0);
@@ -93,6 +96,7 @@ static bool http_do(const std::wstring& url, const std::wstring& verb,
     WinHttpCloseHandle(ses);
 
     if (!ok) { err = L"网络请求失败"; return false; }
+    if (status == 401) { err = L"HTTP 401：API 认证失败，请检查 API Key 是否有效，以及接口地址是否属于该 Key 的服务商。"; return false; }
     if (status == 429) { err = L"翻译接口请求过于频繁，请稍后再试"; return false; }
     if (status >= 400) {
         wchar_t buf[64];
@@ -274,7 +278,18 @@ static bool translate_mymemory(const std::wstring& text, const std::wstring& src
 static bool translate_llm(const std::wstring& text, const std::wstring& src,
                           const std::wstring& dst, const Settings& cfg,
                           std::wstring& out, std::wstring& err) {
-    std::wstring base = cfg.llm_base.empty() ? L"https://api.deepseek.com/v1" : cfg.llm_base;
+    std::wstring key=cfg.llm_key;
+    auto trim=[](std::wstring value) {
+        auto first=value.find_first_not_of(L" \r\n\t"),last=value.find_last_not_of(L" \r\n\t");
+        return first==std::wstring::npos?std::wstring():value.substr(first,last-first+1);
+    };
+    key=trim(key);
+    if(key.size()>=7 && _wcsnicmp(key.c_str(),L"Bearer ",7)==0)key=trim(key.substr(7));
+    if(key.empty() || key.find_first_of(L" \r\n\t")!=std::wstring::npos) {
+        err=L"API Key 格式无效，请粘贴完整密钥，不要包含换行或空格。";return false;
+    }
+    std::wstring base = trim(cfg.llm_base);
+    if(base.empty())base=L"https://api.deepseek.com/v1";
     while (!base.empty() && base.back() == L'/') base.pop_back();
     std::wstring model = cfg.llm_model.empty() ? L"deepseek-chat" : cfg.llm_model;
 
@@ -288,8 +303,8 @@ static bool translate_llm(const std::wstring& text, const std::wstring& src,
 
     std::string resp;
     std::wstring e2;
-    std::wstring url = base + L"/chat/completions";
-    if (!http_do(url, L"POST", body, L"application/json", resp, e2)) {
+    std::wstring url = (base.size()>=17 && base.compare(base.size()-17,17,L"/chat/completions")==0) ? base : base + L"/chat/completions";
+    if (!http_do(url, L"POST", body, L"application/json", resp, e2, key)) {
         err = e2;
         return false;
     }

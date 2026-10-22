@@ -37,8 +37,11 @@ HDC CachedPaper(HDC target,int width,int height) {
     cache.previous=SelectObject(cache.dc,cache.bitmap);cache.width=width;cache.height=height;
     RECT r{0,0,width,height};FillRect(cache.dc,&r,(HBRUSH)GetStockObject(WHITE_BRUSH));
     Gdiplus::Graphics g(cache.dc);if(auto art=Artwork())g.DrawImage(art,0,0,width,height);
-    Gdiplus::SolidBrush veil(Gdiplus::Color(55,250,250,240));g.FillRectangle(&veil,0,0,width,height);
-    Gdiplus::SolidBrush sidebar(Gdiplus::Color(216,247,247,238));g.FillRectangle(&sidebar,0,0,(int)(width*.158f),height);
+    g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+    Gdiplus::SolidBrush sidebar(Gdiplus::Color(145,250,249,241));g.FillRectangle(&sidebar,0,0,(int)(width*.195f),height);
+    float x=width*.21f,y=height*.081f,ww=width*.775f,hh=height*.86f,rr=20.f;
+    Gdiplus::GraphicsPath card;card.AddArc(x,y,rr,rr,180,90);card.AddArc(x+ww-rr,y,rr,rr,270,90);card.AddArc(x+ww-rr,y+hh-rr,rr,rr,0,90);card.AddArc(x,y+hh-rr,rr,rr,90,90);card.CloseFigure();
+    Gdiplus::SolidBrush paper(Gdiplus::Color(75,255,255,251));Gdiplus::Pen edge(Gdiplus::Color(170,213,217,199),1.f);g.FillPath(&paper,&card);g.DrawPath(&edge,&card);
     ++backgroundBuilds;return cache.dc;
 }
 void PaperAt(HWND h,HDC dc,RECT r) {
@@ -72,16 +75,16 @@ void Branch(Gdiplus::Graphics& g,float x,float y,float scale,float rotation) {
     g.Restore(save);
 }
 LRESULT CALLBACK Styled(HWND h,UINT m,WPARAM w,LPARAM l,UINT_PTR,DWORD_PTR) {
-    if(m==WM_NCDESTROY) { RemovePropW(h,L"IntegrationPaintCount"); RemoveWindowSubclass(h,Styled,0x734); return DefSubclassProc(h,m,w,l); }
+    if(m==WM_NCDESTROY) { RemovePropW(h,L"IntegrationPaintCount");RemovePropW(h,L"BotanicalHover"); RemoveWindowSubclass(h,Styled,0x734); return DefSubclassProc(h,m,w,l); }
     if(m==WM_PAINT && toolbox::testMode)SetPropW(h,L"IntegrationPaintCount",(HANDLE)((ULONG_PTR)GetPropW(h,L"IntegrationPaintCount")+1));
     wchar_t cls[64]{}; GetClassNameW(h,cls,64);
     if(m==WM_ERASEBKGND && (wcscmp(cls,L"LiteCapMainWnd")==0 || wcscmp(cls,L"CppToolbox.Page")==0 ||
         wcscmp(cls,L"Button")==0 || wcscmp(cls,L"ComboBox")==0))return 1;
-    if((m==WM_PAINT || m==WM_PRINTCLIENT) && wcscmp(cls,L"Static")==0 && GetParent(h)==toolbox::host) {
+    if((m==WM_PAINT || m==WM_PRINTCLIENT) && wcscmp(cls,L"Static")==0 && GetAncestor(h,GA_ROOT)==toolbox::host) {
         PAINTSTRUCT ps{};HDC dc=m==WM_PAINT?BeginPaint(h,&ps):(HDC)w;RECT r{};GetClientRect(h,&r);PaperAt(h,dc,r);
         wchar_t text[1024]{};GetWindowTextW(h,text,1024);auto font=(HFONT)SendMessageW(h,WM_GETFONT,0,0);
         if(font)SelectObject(dc,font);SetTextColor(dc,Ink);SetBkMode(dc,TRANSPARENT);
-        DrawTextW(dc,text,-1,&r,DT_LEFT|DT_WORDBREAK);if(m==WM_PAINT)EndPaint(h,&ps);return 0;
+        DrawTextW(dc,text,-1,&r,((GetWindowLongPtrW(h,GWL_STYLE)&SS_TYPEMASK)==SS_CENTER?DT_CENTER:DT_LEFT)|DT_WORDBREAK);if(m==WM_PAINT)EndPaint(h,&ps);return 0;
     }
     if(m==WM_NOTIFY && reinterpret_cast<NMHDR*>(l)->code==NM_CUSTOMDRAW) {
         auto header=reinterpret_cast<NMHDR*>(l);wchar_t childClass[64]{};GetClassNameW(header->hwndFrom,childClass,64);
@@ -113,6 +116,15 @@ LRESULT CALLBACK Styled(HWND h,UINT m,WPARAM w,LPARAM l,UINT_PTR,DWORD_PTR) {
             HDITEMW item{};item.mask=HDI_TEXT;item.pszText=text;item.cchTextMax=100;Header_GetItem(h,i,&item);cell.left+=16;
             DrawTextW(dc,text,-1,&cell,DT_LEFT|DT_SINGLELINE|DT_VCENTER);}
         if(m==WM_PAINT)EndPaint(h,&ps);return 0;
+    }
+    if((m==WM_PAINT || m==WM_PRINTCLIENT) && wcscmp(cls,UPDOWN_CLASSW)==0) {
+        PAINTSTRUCT ps{};HDC dc=m==WM_PAINT?BeginPaint(h,&ps):(HDC)w;RECT r{};GetClientRect(h,&r);FillRect(dc,&r,CardBrush());
+        auto pen=CreatePen(PS_SOLID,1,Muted);auto old=SelectObject(dc,pen);int x=r.right/2;
+        for(int y:{r.bottom/4,r.bottom*3/4}) {int sign=y<r.bottom/2?1:-1;MoveToEx(dc,x-3,y+sign,nullptr);LineTo(dc,x,y-sign*2);LineTo(dc,x+3,y+sign);}
+        SelectObject(dc,old);DeleteObject(pen);if(m==WM_PAINT)EndPaint(h,&ps);return 0;
+    }
+    if(m==WM_SIZE && wcscmp(cls,L"Edit")==0) {
+        auto result=DefSubclassProc(h,m,w,l);RECT r{};GetWindowRect(h,&r);SetWindowRgn(h,CreateRoundRectRgn(0,0,r.right-r.left+1,r.bottom-r.top+1,12,12),FALSE);return result;
     }
     if(m==WM_PAINT && wcscmp(cls,L"Edit")==0) {
         auto result=DefSubclassProc(h,m,w,l);HDC dc=GetWindowDC(h);RECT r{};GetWindowRect(h,&r);
@@ -147,21 +159,28 @@ LRESULT CALLBACK Styled(HWND h,UINT m,WPARAM w,LPARAM l,UINT_PTR,DWORD_PTR) {
             wchar_t label[80]{};swprintf_s(label,L"录制文件  (%d)",ListView_GetItemCount(GetDlgItem(h,GetDlgCtrlID(FindWindowExW(h,nullptr,WC_LISTVIEWW,nullptr)))));
             DrawTextW(dc,label,-1,&right,DT_LEFT|DT_VCENTER|DT_SINGLELINE);SelectObject(dc,old);DeleteObject(heading);
             HPEN line=CreatePen(PS_SOLID,1,Border);auto oldpen=SelectObject(dc,line);MoveToEx(dc,left.left-40,left.bottom+6,nullptr);LineTo(dc,split-24,left.bottom+6);SelectObject(dc,oldpen);DeleteObject(line);
-        } else box({2,2,r.right-2,r.bottom-2});
+        }
         if(m==WM_PAINT)EndPaint(h,&ps);return m==WM_PAINT?0:1;
     }
     if(wcscmp(cls,L"Button")==0) {
+        if(m==WM_MOUSEMOVE && !GetPropW(h,L"BotanicalHover") && IsWindowEnabled(h)) {
+            SetPropW(h,L"BotanicalHover",(HANDLE)1);TRACKMOUSEEVENT tracking{sizeof(tracking),TME_LEAVE,h,0};TrackMouseEvent(&tracking);InvalidateRect(h,nullptr,FALSE);
+        }
+        if(m==WM_MOUSELEAVE || m==WM_CANCELMODE || m==WM_ENABLE) {RemovePropW(h,L"BotanicalHover");InvalidateRect(h,nullptr,FALSE);}
+        if(m==WM_LBUTTONDOWN)SendMessageW(GetAncestor(h,GA_ROOT),WM_CHANGEUISTATE,MAKEWPARAM(UIS_SET,UISF_HIDEFOCUS),0);
+        if(m==WM_UPDATEUISTATE) {auto result=DefSubclassProc(h,m,w,l);InvalidateRect(h,nullptr,FALSE);return result;}
         auto kind=GetWindowLongPtrW(h,GWL_STYLE)&BS_TYPEMASK;
         if((m==WM_PAINT || m==WM_PRINTCLIENT) && kind!=BS_OWNERDRAW && kind!=BS_GROUPBOX) {
             PAINTSTRUCT ps{}; HDC dc=m==WM_PAINT?BeginPaint(h,&ps):(HDC)w; RECT r{};GetClientRect(h,&r);
-            FillRect(dc,&r,CardBrush());
+            PaperAt(h,dc,r);
             wchar_t text[256]{};GetWindowTextW(h,text,256);
             bool check=kind==BS_AUTOCHECKBOX || kind==BS_CHECKBOX || kind==BS_AUTORADIOBUTTON || kind==BS_RADIOBUTTON;
             bool primary=GetDlgCtrlID(h)==300 || GetDlgCtrlID(h)==330 || GetDlgCtrlID(h)==340 || GetDlgCtrlID(h)==350 ||
                 wcsstr(text,L"开始") || wcsstr(text,L"停止录制") || wcsstr(text,L"开 始");
             bool enabled=IsWindowEnabled(h)!=FALSE;
             bool down=(SendMessageW(h,BM_GETSTATE,0,0)&BST_PUSHED)!=0;
-            COLORREF bg=primary?(down?Ink:Green):(down?Selected:Paper);
+            bool hover=Hovered(h) && enabled;
+            COLORREF bg=primary?(down?Ink:hover?RGB(82,121,70):Green):(down?RGB(199,214,181):hover?RGB(233,239,220):Paper);
             HPEN pen=CreatePen(PS_SOLID,1,Border); HBRUSH brush=CreateSolidBrush(bg);
             auto oldp=SelectObject(dc,pen),oldb=SelectObject(dc,brush);
             if(check) {
@@ -170,16 +189,16 @@ LRESULT CALLBACK Styled(HWND h,UINT m,WPARAM w,LPARAM l,UINT_PTR,DWORD_PTR) {
                 int side=std::min(14,(int)r.bottom-4), y=(r.bottom-side)/2;
                 if(kind==BS_AUTORADIOBUTTON || kind==BS_RADIOBUTTON) Ellipse(dc,1,y,side+1,y+side);
                 else RoundRect(dc,1,y,side+1,y+side,5,5);
-                if(selected) { HPEN tick=CreatePen(PS_SOLID,2,RGB(255,255,245));auto previous=SelectObject(dc,tick);
-                    MoveToEx(dc,4,y+side/2,nullptr);LineTo(dc,side/2,y+side-4);LineTo(dc,side-3,y+4);
-                    SelectObject(dc,previous);DeleteObject(tick); }
+                if(selected) {
+                    if(kind==BS_AUTORADIOBUTTON || kind==BS_RADIOBUTTON) {
+                        GraphicsRuntime();Gdiplus::Graphics g(dc);g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+                        Gdiplus::SolidBrush dot(Gdiplus::Color(255,255,255,245));g.FillEllipse(&dot,4.f,(float)y+3,(float)side-6,(float)side-6);
+                    } else {HPEN tick=CreatePen(PS_SOLID,2,RGB(255,255,245));auto previous=SelectObject(dc,tick);
+                        MoveToEx(dc,4,y+side/2,nullptr);LineTo(dc,side/2,y+side-4);LineTo(dc,side-3,y+4);SelectObject(dc,previous);DeleteObject(tick);}
+                }
                 r.left+=side+9;
-            } else { RoundRect(dc,0,0,r.right,r.bottom,9,9); r.left+=8; r.right-=8; }
-            if(primary && !check) {
-                GraphicsRuntime();Gdiplus::Graphics g(dc);Gdiplus::LinearGradientBrush gradient(Gdiplus::Point(0,0),Gdiplus::Point(0,r.bottom),
-                    Gdiplus::Color(255,86,122,73),Gdiplus::Color(255,61,93,52));
-                g.FillRectangle(&gradient,3,3,(int)r.right+2,(int)r.bottom-6);
-            }
+            } else { r.left+=GetDlgCtrlID(h)==1205 || GetDlgCtrlID(h)==1206?2:8; r.right-=GetDlgCtrlID(h)==1205 || GetDlgCtrlID(h)==1206?2:8; }
+            if(!check) {RECT full{};GetClientRect(h,&full);Rounded(dc,full,bg,8.f);}
             auto actual=SelectObject(dc,oldb); DeleteObject(actual); SelectObject(dc,oldp); DeleteObject(pen);
             auto font=(HFONT)SendMessageW(h,WM_GETFONT,0,0); if(font)SelectObject(dc,font);
             SetBkMode(dc,TRANSPARENT); SetTextColor(dc,!enabled?Muted:primary&&!check?RGB(255,255,244):Ink);
@@ -196,8 +215,9 @@ LRESULT CALLBACK Styled(HWND h,UINT m,WPARAM w,LPARAM l,UINT_PTR,DWORD_PTR) {
                 int x=r.left+22,y=r.bottom/2;Ellipse(dc,x-13,y-13,x+13,y+13);Ellipse(dc,x-8,y-8,x+8,y+8);
                 SelectObject(dc,old);SelectObject(dc,b);DeleteObject(pen);r.left+=44;
             }
+            if(down)OffsetRect(&r,0,1);
             DrawTextW(dc,text,-1,&r,(check?DT_LEFT:DT_CENTER)|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS);
-            if(GetFocus()==h) { InflateRect(&r,-3,-3);DrawFocusRect(dc,&r); }
+            if(GetFocus()==h && !(SendMessageW(h,WM_QUERYUISTATE,0,0)&UISF_HIDEFOCUS)) {RECT focus{};GetClientRect(h,&focus);InflateRect(&focus,-2,-2);FocusRing(dc,focus,7.f);}
             if(m==WM_PAINT)EndPaint(h,&ps);return 0;
         }
         if(m==BM_SETCHECK || m==BM_SETSTATE || m==WM_ENABLE || m==WM_SETFOCUS || m==WM_KILLFOCUS) {
@@ -240,6 +260,19 @@ void PaintSurface(HWND window,HDC dc,RECT bounds) {PaperAt(window,dc,bounds);}
 unsigned BackgroundBuilds(){return backgroundBuilds;}
 void PaintBackdrop(HDC dc,RECT r,bool foliage) {
     if(auto cached=CachedPaper(dc,r.right,r.bottom))BitBlt(dc,0,0,r.right,r.bottom,cached,0,0,SRCCOPY);
+}
+bool Hovered(HWND window){return GetPropW(window,L"BotanicalHover")!=nullptr;}
+void FocusRing(HDC dc,RECT b,float radius) {
+    GraphicsRuntime();Gdiplus::Graphics g(dc);g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+    float x=(float)b.left+.5f,y=(float)b.top+.5f,w=(float)(b.right-b.left)-1,h=(float)(b.bottom-b.top)-1,rr=radius*2;
+    Gdiplus::GraphicsPath p;p.AddArc(x,y,rr,rr,180,90);p.AddArc(x+w-rr,y,rr,rr,270,90);p.AddArc(x+w-rr,y+h-rr,rr,rr,0,90);p.AddArc(x,y+h-rr,rr,rr,90,90);p.CloseFigure();
+    Gdiplus::Pen pen(Gdiplus::Color(255,96,131,76),1.5f);g.DrawPath(&pen,&p);
+}
+void Rounded(HDC dc,RECT b,COLORREF color,float radius) {
+    GraphicsRuntime();Gdiplus::Graphics g(dc);g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+    float x=(float)b.left+.5f,y=(float)b.top+.5f,w=(float)(b.right-b.left)-1,h=(float)(b.bottom-b.top)-1,rr=radius*2;
+    Gdiplus::GraphicsPath p;p.AddArc(x,y,rr,rr,180,90);p.AddArc(x+w-rr,y,rr,rr,270,90);p.AddArc(x+w-rr,y+h-rr,rr,rr,0,90);p.AddArc(x,y+h-rr,rr,rr,90,90);p.CloseFigure();
+    Gdiplus::SolidBrush fill(Gdiplus::Color(255,GetRValue(color),GetGValue(color),GetBValue(color)));if(color==Green) {Gdiplus::LinearGradientBrush gradient(Gdiplus::PointF(x,y),Gdiplus::PointF(x,y+h),Gdiplus::Color(255,91,137,79),Gdiplus::Color(255,53,91,46));g.FillPath(&gradient,&p);} else g.FillPath(&fill,&p);
 }
 void Icon(HDC dc,RECT b,int kind) {
     GraphicsRuntime();Gdiplus::Graphics g(dc);g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);

@@ -9,7 +9,7 @@
 402 RCDATA "alarm.wav"
 405 WAVE "record-shutter.wav"
 403 RCDATA "lol-helper.lua"
-404 RCDATA "botanical-paper-reference.png"
+404 RCDATA "botanical-timer-reference.png"
 302 DIALOGEX 0, 0, 238, 92
 STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "攻速刷新间隔"
@@ -22,8 +22,8 @@ BEGIN
     PUSHBUTTON "取消", IDCANCEL, 124, 63, 46, 16
 END
 1 VERSIONINFO
- FILEVERSION 1,1,0,0
- PRODUCTVERSION 1,1,0,0
+ FILEVERSION 1,2,0,0
+ PRODUCTVERSION 1,2,0,0
  FILEOS VOS_NT_WINDOWS32
  FILETYPE VFT_APP
 BEGIN
@@ -33,7 +33,7 @@ BEGIN
   BEGIN
    VALUE "FileDescription", "C++ 六合一工具箱\0"
    VALUE "ProductName", "工具箱\0"
-   VALUE "FileVersion", "1.1.0\0"
+   VALUE "FileVersion", "1.2.0\0"
   END
  END
  BLOCK "VarFileInfo"

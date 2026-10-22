@@ -44,6 +44,9 @@ static void CountdownActionImpl(toolbox::Action action) {
             throw std::runtime_error("countdown mode radio click failed");
         for(HWND edit : {g_edDay,g_edHour,g_edMin,g_edSec}) {
             if(!IsWindowEnabled(edit)) throw std::runtime_error("countdown edit disabled");
+            RECT client{},format{};GetClientRect(edit,&client);SendMessageW(edit,EM_GETRECT,0,(LPARAM)&format);
+            if(format.top<2 || std::abs(format.top-(client.bottom-format.bottom))>2)
+                throw std::runtime_error("countdown input text must be vertically centered");
             SetFocus(edit); SetWindowTextW(edit,L""); SendMessageW(edit,WM_CHAR,L'8',0);
             if(getEditInt(edit,0)!=8) throw std::runtime_error("countdown keyboard input failed");
         }

@@ -20,6 +20,7 @@
 #include <windows.h>
 #include "../../gateway.h"
 #include <commdlg.h>
+#include <commctrl.h>
 #include <mmsystem.h>
 #include <shellapi.h>
 
@@ -29,6 +30,10 @@
 #include <cstdarg>
 #include <cmath>
 #include "alarm_time.h"
+#include "../../theme.h"
+#include <objidl.h>
+#include <gdiplus.h>
+#include <algorithm>
 
 #pragma comment(lib, "winmm.lib")
 #pragma comment(lib, "comdlg32.lib")
@@ -130,7 +135,7 @@ static const COLORREF C_DANGER  = RGB(214, 48, 49);
 static const COLORREF C_TRACK   = RGB(236, 238, 242);
 static const COLORREF C_GREEN   = RGB(38, 160, 90);
 
-static int S(int v) { return MulDiv(v, g_dpi*75, 9600); }
+static int S(int v) { return MulDiv(v, g_dpi*80, 9600); }
 
 // 前置声明
 static void startCountdown();
@@ -671,7 +676,7 @@ static bool ensureBackBuffer(HDC hdcRef, int w, int h) {
 // 只需要重绘上半部分的动态内容（大数字 / 副标题 / 进度条 / 分隔线），
 // 下半部分是子控件，不参与父窗口重绘，减少绘制面积
 static void invalidateDynamic(HWND hwnd) {
-    RECT rc{ 0, 0, S(520), S(202) };
+    RECT rc{ 0, 0, S(520), S(284) };
     InvalidateRect(hwnd, &rc, FALSE);
 }
 
@@ -690,9 +695,8 @@ static void paintWindow(HWND hwnd) {
     }
     HDC hdc = g_memDC;
 
-    HBRUSH bg = CreateSolidBrush(C_BG);
-    FillRect(hdc, &rcClient, bg);
-    DeleteObject(bg);
+    toolbox::theme::PaintSurface(hwnd,hdc,rcClient);
+
 
     SetBkMode(hdc, TRANSPARENT);
 
@@ -734,59 +738,38 @@ static void paintWindow(HWND hwnd) {
         wchar_t time[32]{}; swprintf(time,32,L"%02d:%02d:%02d",getEditInt(g_edHour,0),getEditInt(g_edMin,0),getEditInt(g_edSec,0));
         bigText=time; subText=L"24 小时制 · 已过时间将在明天响铃";
     } else if(g_alarmMode && g_mode==MODE_RUN) subText=g_alarmLabel;
-    // ---------- 大号时间 ----------
-    SelectObject(hdc, g_fontBig);
-    SetTextColor(hdc, bigColor);
-    RECT rcBig{ 0, S(28), W, S(28) + S(96) };
-    DrawTextW(hdc, bigText.c_str(), -1, &rcBig, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
-
-    // ---------- 副标题 ----------
-    SelectObject(hdc, g_fontSmall);
-    SetTextColor(hdc, g_mode == MODE_DONE ? C_DANGER : C_MUTED);
-    RECT rcSub{ 0, S(122), W, S(122) + S(24) };
-    DrawTextW(hdc, subText.c_str(), -1, &rcSub, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
-
-    // ---------- 进度条 ----------
-    int barL = S(48), barR = W - S(48);
-    int barT = S(158), barB = barT + S(14);
-    RECT rcTrack{ barL, barT, barR, barB };
-    fillRoundRect(hdc, rcTrack, S(14), C_TRACK);
-
-    double ratio = 0.0;
-    if (g_mode == MODE_DONE) ratio = 1.0;
-    else if (g_totalMs > 0 && g_mode != MODE_IDLE)
-        ratio = (double)g_elapsedMs / (double)g_totalMs;
-    if (ratio < 0) ratio = 0;
-    if (ratio > 1) ratio = 1;
-
-    if (ratio > 0.001) {
-        int fillR = barL + (int)std::lround((barR - barL) * ratio);
-        if (fillR - barL < S(14)) fillR = barL + S(14);
-        RECT rcFill{ barL, barT, fillR, barB };
-        COLORREF fc = (g_mode == MODE_DONE) ? C_DANGER
-                    : (g_mode == MODE_PAUSE) ? C_PAUSE : C_ACCENT;
-        fillRoundRect(hdc, rcFill, S(14), fc);
-    }
-
-    // ---------- 百分比 ----------
-    if (g_mode != MODE_IDLE) {
-        wchar_t pct[16];
-        swprintf(pct, 16, L"%d%%", (int)std::lround(ratio * 100));
-        SelectObject(hdc, g_fontSmall);
-        SetTextColor(hdc, C_MUTED);
-        RECT rcPct{ barL, barB + S(4), barR, barB + S(24) };
-        DrawTextW(hdc, pct, -1, &rcPct, DT_RIGHT | DT_TOP | DT_SINGLELINE | DT_NOPREFIX);
-    }
-
-    // ---------- 分隔线 ----------
+    double ratio=0;
+    if(g_mode==MODE_DONE)ratio=1;
+    else if(g_totalMs>0 && g_mode!=MODE_IDLE)ratio=std::clamp((double)g_elapsedMs/g_totalMs,0.0,1.0);
     {
-        HPEN pen = CreatePen(PS_SOLID, 1, RGB(238, 240, 244));
-        HGDIOBJ op = SelectObject(hdc, pen);
-        MoveToEx(hdc, S(32), S(196), nullptr);
-        LineTo(hdc, W - S(32), S(196));
-        SelectObject(hdc, op);
-        DeleteObject(pen);
+        Gdiplus::Graphics g(hdc);g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+        float diameter=(float)S(338),left=(W-diameter)/2,top=(float)S(8);
+        Gdiplus::Pen track(Gdiplus::Color(205,255,255,250),(float)S(9));
+        g.DrawEllipse(&track,left,top,diameter,diameter);
+        Gdiplus::Pen progress(Gdiplus::Color(255,102,146,83),(float)S(9));
+        progress.SetStartCap(Gdiplus::LineCapRound);progress.SetEndCap(Gdiplus::LineCapRound);
+        float sweep=g_mode==MODE_IDLE?92.f:(float)(360*(1-ratio));
+        if(sweep>0.01f)g.DrawArc(&progress,left,top,diameter,diameter,-90.f,sweep);
+        // A small leaf sprig keeps the center decoration sharp at every DPI.
+        auto state=g.Save();g.TranslateTransform(W/2.f,(float)S(95));g.ScaleTransform(g_dpi*.8f/96,g_dpi*.8f/96);
+        Gdiplus::Pen stem(Gdiplus::Color(255,88,115,67),1.2f);
+        g.DrawLine(&stem,0.f,5.f,9.f,-27.f);g.DrawLine(&stem,0.f,5.f,-17.f,-19.f);
+        Gdiplus::SolidBrush leaf(Gdiplus::Color(200,138,163,109));
+        Gdiplus::GraphicsPath a;a.AddBezier(4.f,-9.f,-1.f,-24.f,12.f,-28.f,14.f,-38.f);a.AddBezier(14.f,-38.f,25.f,-17.f,9.f,-12.f,4.f,-9.f);g.FillPath(&leaf,&a);
+        Gdiplus::GraphicsPath b;b.AddBezier(-4.f,-1.f,-22.f,0.f,-29.f,-18.f,-34.f,-24.f);b.AddBezier(-34.f,-24.f,-13.f,-22.f,-8.f,-12.f,-4.f,-1.f);g.FillPath(&leaf,&b);g.Restore(state);
+        auto card=[&](float x,float y,float width,float height,float radius) {
+            Gdiplus::GraphicsPath path;path.AddArc(x,y,radius,radius,180,90);path.AddArc(x+width-radius,y,radius,radius,270,90);path.AddArc(x+width-radius,y+height-radius,radius,radius,0,90);path.AddArc(x,y+height-radius,radius,radius,90,90);path.CloseFigure();
+            Gdiplus::SolidBrush paper(Gdiplus::Color(225,253,252,246));Gdiplus::Pen border(Gdiplus::Color(255,215,219,202),1.f);g.FillPath(&paper,&path);g.DrawPath(&border,&path);
+        };
+        card((float)S(48),(float)S(284),(float)S(424),(float)S(40),(float)S(38));
+        card((float)S(30),(float)S(484),(float)S(460),(float)S(90),(float)S(20));
     }
+    SelectObject(hdc,g_fontBig);SetTextColor(hdc,bigColor);
+    RECT rcBig{S(12),S(126),W-S(12),S(208)};
+    DrawTextW(hdc,bigText.c_str(),-1,&rcBig,DT_CENTER|DT_VCENTER|DT_SINGLELINE|DT_NOPREFIX);
+    SelectObject(hdc,g_fontSmall);SetTextColor(hdc,C_MUTED);
+    RECT rcSub{S(24),S(216),W-S(24),S(253)};
+    DrawTextW(hdc,subText.c_str(),-1,&rcSub,DT_CENTER|DT_WORDBREAK|DT_NOPREFIX);
 
     BitBlt(hdcReal, 0, 0, W, H, hdc, 0, 0, SRCCOPY);
     EndPaint(hwnd, &ps);
@@ -909,11 +892,27 @@ static HWND makeLabel(HWND parent, const wchar_t* text, int x, int y, int w, int
     return ctrl;
 }
 
+// Preserve native editing/caret behavior while centering a single numeric line.
+static LRESULT CALLBACK timeEditProc(HWND h,UINT message,WPARAM w,LPARAM l,UINT_PTR,DWORD_PTR) {
+    if(message==WM_NCDESTROY) {RemoveWindowSubclass(h,timeEditProc,0x812);return DefSubclassProc(h,message,w,l);}
+    if(message==WM_CHAR && (w==L'\r' || w==L'\n'))return 0;
+    auto result=DefSubclassProc(h,message,w,l);
+    if(message==WM_SIZE || message==WM_SETFONT) {
+        RECT r{};GetClientRect(h,&r);HDC dc=GetDC(h);auto font=(HFONT)SendMessageW(h,WM_GETFONT,0,0);
+        auto previous=font?SelectObject(dc,font):nullptr;TEXTMETRICW metrics{};GetTextMetricsW(dc,&metrics);
+        if(previous)SelectObject(dc,previous);ReleaseDC(h,dc);
+        int height=metrics.tmHeight;r.top=std::max(0,((int)r.bottom-height)/2);r.bottom=r.top+height;
+        r.left=3;r.right=std::max(4,(int)r.right-3);SendMessageW(h,EM_SETRECTNP,0,(LPARAM)&r);InvalidateRect(h,nullptr,FALSE);
+    }
+    return result;
+}
+
 static HWND makeEdit(HWND parent, int id, int x, int y, int w, int h) {
-    HWND e = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"0",
-                             WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_NUMBER | ES_CENTER | ES_AUTOHSCROLL,
+    HWND e = CreateWindowExW(0, L"EDIT", L"0",
+                             WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_NUMBER | ES_CENTER | ES_MULTILINE,
                              S(x), S(y), S(w), S(h),
                              parent, (HMENU)(INT_PTR)id, g_hInst, nullptr);
+    SetWindowSubclass(e,timeEditProc,0x812,0);
     SendMessageW(e, WM_SETFONT, (WPARAM)g_fontUI, TRUE);
     return e;
 }
@@ -928,16 +927,16 @@ static HWND makeButton(HWND parent, int id, const wchar_t* text, int x, int y, i
 }
 
 static void createControls(HWND hwnd) {
-    g_modeChoice=CreateWindowExW(0,L"BUTTON",L"倒计时",WS_CHILD|WS_VISIBLE|WS_TABSTOP|WS_GROUP|BS_AUTORADIOBUTTON,S(140),S(174),S(110),S(26),hwnd,(HMENU)115,g_hInst,nullptr);
-    g_alarmChoice=CreateWindowExW(0,L"BUTTON",L"定时闹钟",WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_AUTORADIOBUTTON,S(270),S(174),S(130),S(26),hwnd,(HMENU)116,g_hInst,nullptr);
+    g_modeChoice=CreateWindowExW(0,L"BUTTON",L"倒计时",WS_CHILD|WS_VISIBLE|WS_TABSTOP|WS_GROUP|BS_AUTORADIOBUTTON,S(108),S(291),S(132),S(26),hwnd,(HMENU)115,g_hInst,nullptr);
+    g_alarmChoice=CreateWindowExW(0,L"BUTTON",L"定时闹钟",WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_AUTORADIOBUTTON,S(292),S(291),S(146),S(26),hwnd,(HMENU)116,g_hInst,nullptr);
     SendMessageW(g_modeChoice,WM_SETFONT,(WPARAM)g_fontUI,TRUE);
     SendMessageW(g_alarmChoice,WM_SETFONT,(WPARAM)g_fontUI,TRUE);
     SendMessageW(g_modeChoice,BM_SETCHECK,BST_CHECKED,0);
     // 输入框组：4 个框 + 3 个冒号
-    const int boxW = 74, boxH = 34, gap = 26;
+    const int boxW = 86, boxH = 40, gap = 18;
     int totalW = 4 * boxW + 3 * gap;
     int startX = (520 - totalW) / 2;
-    int boxY = 232;
+    int boxY = 360;
 
     const wchar_t* names[4] = { L"天", L"小时", L"分钟", L"秒" };
     HWND* edits[4] = { &g_edDay, &g_edHour, &g_edMin, &g_edSec };
@@ -947,13 +946,16 @@ static void createControls(HWND hwnd) {
         int x = startX + i * (boxW + gap);
         makeLabel(hwnd, names[i], x, boxY - 24, boxW, 20, g_fontSmall, SS_CENTER);
         *edits[i] = makeEdit(hwnd, ids[i], x, boxY, boxW, boxH);
+        HWND spin=CreateWindowExW(0,UPDOWN_CLASSW,L"",WS_CHILD|WS_VISIBLE|UDS_ALIGNRIGHT|UDS_SETBUDDYINT|UDS_ARROWKEYS,S(x+boxW-18),S(boxY),S(18),S(boxH),hwnd,nullptr,g_hInst,nullptr);
+        SendMessageW(spin,UDM_SETBUDDY,(WPARAM)*edits[i],0);
+        SendMessageW(spin,UDM_SETRANGE32,0,i==0?999:i==1?23:59);
         if (i < 3) {
             makeLabel(hwnd, L":", x + boxW, boxY + 4, gap, 24, g_fontUI, SS_CENTER);
         }
     }
 
     // 按钮行
-    int btnY = 292, btnH = 36, btnW = 112, btnGap = 18;
+    int btnY = 420, btnH = 44, btnW = 132, btnGap = 14;
     int btnTotal = 3 * btnW + 2 * btnGap;
     int btnX = (520 - btnTotal) / 2;
 
@@ -962,13 +964,13 @@ static void createControls(HWND hwnd) {
     g_btnReset = makeButton(hwnd, ID_BTN_RESET, L"重 置", btnX + 2 * (btnW + btnGap), btnY, btnW, btnH);
 
     // 声音行
-    g_lblSound = makeLabel(hwnd, L"提示音：", 44, 352, 320, 22, g_fontSmall, SS_LEFT);
-    g_btnSound = makeButton(hwnd, ID_BTN_SOUND, L"浏览...", 380, 348, 96, 28);
+    g_lblSound = makeLabel(hwnd, L"提示音：", 52, 502, 300, 24, g_fontSmall, SS_LEFT);
+    g_btnSound = makeButton(hwnd, ID_BTN_SOUND, L"浏览...", 370, 496, 96, 34);
 
     // 弹窗复选框
     g_chkPopup = CreateWindowExW(0, L"BUTTON", L"结束时弹出提示窗口",
                                  WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
-                                 S(44), S(386), S(240), S(24),
+                                 S(52), S(542), S(310), S(24),
                                  hwnd, (HMENU)(INT_PTR)ID_CHK_POPUP, g_hInst, nullptr);
     SendMessageW(g_chkPopup, WM_SETFONT, (WPARAM)g_fontSmall, TRUE);
     SendMessageW(g_chkPopup, BM_SETCHECK, g_popup ? BST_CHECKED : BST_UNCHECKED, 0);
@@ -1202,13 +1204,13 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int) {
     if (!g_iconSmall) g_iconSmall = createAppIcon(GetSystemMetrics(SM_CXSMICON));
 
     // 字体
-    g_fontBig = CreateFontW(-S(76), 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE,
+    g_fontBig = CreateFontW(-S(60), 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE,
                             DEFAULT_CHARSET, OUT_TT_PRECIS, CLIP_DEFAULT_PRECIS,
-                            CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
-    g_fontUI = CreateFontW(-S(15), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+                            CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Georgia");
+    g_fontUI = CreateFontW(-S(20), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
                            DEFAULT_CHARSET, OUT_TT_PRECIS, CLIP_DEFAULT_PRECIS,
                            CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Microsoft YaHei UI");
-    g_fontSmall = CreateFontW(-S(13), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+    g_fontSmall = CreateFontW(-S(16), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
                               DEFAULT_CHARSET, OUT_TT_PRECIS, CLIP_DEFAULT_PRECIS,
                               CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Microsoft YaHei UI");
     g_bgBrush = CreateSolidBrush(C_BG);
