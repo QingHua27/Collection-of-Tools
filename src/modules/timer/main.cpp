@@ -30,6 +30,7 @@
 #include <cstdarg>
 #include <cmath>
 #include "alarm_time.h"
+#include "timer_session.h"
 #include "../../theme.h"
 #include <objidl.h>
 #include <gdiplus.h>
@@ -101,6 +102,7 @@ static HWND g_modeChoice=nullptr, g_alarmChoice=nullptr;
 static std::chrono::system_clock::time_point g_alarmTarget;
 static std::wstring g_alarmLabel;
 static unsigned g_completedCount = 0;
+static long long g_deadlineMs = 0;
 static long long g_totalMs = 0;        // 总时长（毫秒）
 static long long g_elapsedMs = 0;      // 已过（毫秒）
 static Clock::time_point g_lastTick;
@@ -143,6 +145,10 @@ static void togglePause();
 static void resetCountdown();
 static void showMainWindow();
 static void invalidateDynamic(HWND hwnd);
+static void saveSession();
+static void restoreSession();
+static void finishCountdown();
+constexpr UINT WM_RESTORE_SESSION=WM_APP+106;
 
 // ---------------------------------------------------------------------------
 //  声音播放（wav / mp3 / 系统别名）
@@ -778,6 +784,40 @@ static void paintWindow(HWND hwnd) {
 // ---------------------------------------------------------------------------
 //  开始 / 暂停 / 重置 / 结束
 // ---------------------------------------------------------------------------
+static void saveSession() {
+    timer_session::State saved;
+    if(g_mode==MODE_RUN || g_mode==MODE_PAUSE) {
+        saved.mode=g_mode==MODE_RUN?1:2;saved.alarm=g_alarmMode;
+        saved.total=g_totalMs;saved.remaining=std::clamp(g_totalMs-g_elapsedMs,0LL,g_totalMs);saved.deadline=g_deadlineMs;
+        saved.popup=g_popup;saved.loop=g_loopSound;saved.flash=g_flash;
+        HWND fields[]={g_edDay,g_edHour,g_edMin,g_edSec};for(int i=0;i<4;++i)saved.input[i]=getEditInt(fields[i],0);
+        wcsncpy_s(saved.sound,g_soundFile.c_str(),_TRUNCATE);
+    }
+    if(!timer_session::Save(exeDir()+L"\\session.dat",saved))toolbox::Log(L"countdown session persistence failed");
+}
+
+static void restoreSession() {
+    timer_session::State saved;if(!timer_session::Load(exeDir()+L"\\session.dat",saved))return;
+    KillTimer(g_hwnd,ID_TIMER_TICK);
+    g_alarmMode=saved.alarm!=0;g_popup=saved.popup!=0;g_loopSound=saved.loop!=0;g_flash=saved.flash!=0;g_soundFile=saved.sound;
+    HWND fields[]={g_edDay,g_edHour,g_edMin,g_edSec};for(int i=0;i<4;++i)SetWindowTextW(fields[i],std::to_wstring(saved.input[i]).c_str());
+    SendMessageW(g_modeChoice,BM_SETCHECK,g_alarmMode?BST_UNCHECKED:BST_CHECKED,0);
+    SendMessageW(g_alarmChoice,BM_SETCHECK,g_alarmMode?BST_CHECKED:BST_UNCHECKED,0);
+    SendMessageW(g_chkPopup,BM_SETCHECK,g_popup?BST_CHECKED:BST_UNCHECKED,0);updateSoundLabel();
+    g_totalMs=saved.total;g_deadlineMs=saved.deadline;
+    auto remaining=timer_session::Remaining(saved,timer_session::Now());g_elapsedMs=g_totalMs-remaining;
+    g_mode=saved.mode==2?MODE_PAUSE:MODE_RUN;g_lastTick=Clock::now();
+    if(g_alarmMode) {
+        g_alarmTarget=std::chrono::system_clock::time_point(std::chrono::milliseconds(g_deadlineMs));
+        auto time=std::chrono::system_clock::to_time_t(g_alarmTarget);std::tm local{};localtime_s(&local,&time);wchar_t label[80]{};
+        wcsftime(label,80,L"闹钟：%m月%d日 %H:%M:%S",&local);g_alarmLabel=label;
+    }
+    updateUI();
+    if(g_mode==MODE_RUN) {
+        if(remaining==0)finishCountdown();else SetTimer(g_hwnd,ID_TIMER_TICK,50,nullptr);
+    }
+}
+
 static void startCountdown() {
     long long ms = readDurationMs();
     if(g_alarmMode) {
@@ -796,24 +836,31 @@ static void startCountdown() {
         SetFocus(g_edSec);
         return;
     }
+    if(ms>timer_session::MaxDuration) {MessageBoxW(g_hwnd,L"倒计时时长不能超过 1000 天。",L"提示",MB_OK|MB_ICONWARNING);return;}
+    g_deadlineMs=g_alarmMode?std::chrono::duration_cast<std::chrono::milliseconds>(g_alarmTarget.time_since_epoch()).count():timer_session::Now()+ms;
     g_totalMs = ms;
     g_elapsedMs = 0;
     g_mode = MODE_RUN;
     g_lastTick = Clock::now();
     SetTimer(g_hwnd, ID_TIMER_TICK, 50, nullptr);
+    saveSession();
     updateUI();
 }
 
 static void togglePause() {
     if(g_alarmMode) return;
     if (g_mode == MODE_RUN) {
+        g_elapsedMs=g_totalMs-std::clamp(g_deadlineMs-timer_session::Now(),0LL,g_totalMs);
+        if(g_elapsedMs>=g_totalMs) {finishCountdown();return;}
         g_mode = MODE_PAUSE;
         KillTimer(g_hwnd, ID_TIMER_TICK);
     } else if (g_mode == MODE_PAUSE) {
         g_mode = MODE_RUN;
+        g_deadlineMs=timer_session::Now()+(g_totalMs-g_elapsedMs);
         g_lastTick = Clock::now();
         SetTimer(g_hwnd, ID_TIMER_TICK, 50, nullptr);
     }
+    saveSession();
     updateUI();
 }
 
@@ -823,6 +870,7 @@ static void resetCountdown() {
     g_mode = MODE_IDLE;
     g_totalMs = 0;
     g_elapsedMs = 0;
+    saveSession();
     updateUI();
 }
 
@@ -831,6 +879,7 @@ static void finishCountdown() {
     KillTimer(g_hwnd, ID_TIMER_TICK);
     g_mode = MODE_DONE;
     g_elapsedMs = g_totalMs;
+    saveSession(); // Consume before presenting the reminder so it does not replay at every launch.
     updateUI();
     updateTrayTip(0);
 
@@ -892,10 +941,50 @@ static HWND makeLabel(HWND parent, const wchar_t* text, int x, int y, int w, int
     return ctrl;
 }
 
+static int timeFieldMaximum(HWND h) {int id=GetDlgCtrlID(h);return id==ID_EDIT_DAY?999:id==ID_EDIT_HOUR?23:59;}
+static bool acceptsTimeInput(HWND h,const std::wstring& inserted) {
+    wchar_t text[32]{};GetWindowTextW(h,text,32);DWORD first=0,last=0;SendMessageW(h,EM_GETSEL,(WPARAM)&first,(LPARAM)&last);
+    std::wstring candidate=text;first=std::min(first,(DWORD)candidate.size());last=std::min(last,(DWORD)candidate.size());candidate.replace(first,last-first,inserted);
+    if(candidate.empty())return true;
+    if(candidate.size()>(GetDlgCtrlID(h)==ID_EDIT_DAY?3u:2u))return false;
+    int value=0;for(auto c:candidate) {if(c<L'0' || c>L'9')return false;value=value*10+c-L'0';}
+    return value<=timeFieldMaximum(h);
+}
+static void normalizeTimeInput(HWND h) {
+    static bool updating=false;if(updating)return;
+    wchar_t text[64]{};GetWindowTextW(h,text,64);if(!text[0])return;
+    int maximum=timeFieldMaximum(h),value=0;bool valid=true;
+    for(auto c:std::wstring(text)) {if(c<L'0' || c>L'9') {valid=false;break;}value=std::min(maximum+1,value*10+c-L'0');}
+    if(!valid || value>maximum) {updating=true;SetWindowTextW(h,std::to_wstring(valid?maximum:0).c_str());SendMessageW(h,EM_SETSEL,0,-1);updating=false;}
+}
+
 // Preserve native editing/caret behavior while centering a single numeric line.
 static LRESULT CALLBACK timeEditProc(HWND h,UINT message,WPARAM w,LPARAM l,UINT_PTR,DWORD_PTR) {
     if(message==WM_NCDESTROY) {RemoveWindowSubclass(h,timeEditProc,0x812);return DefSubclassProc(h,message,w,l);}
-    if(message==WM_CHAR && (w==L'\r' || w==L'\n'))return 0;
+    if(message==WM_SETTEXT && l && *(const wchar_t*)l) {
+        const wchar_t* text=(const wchar_t*)l;int maximum=timeFieldMaximum(h),value=0;bool valid=true;
+        for(auto c:std::wstring(text)) {if(c<L'0' || c>L'9') {valid=false;break;}value=std::min(maximum+1,value*10+c-L'0');}
+        if(!valid || value>maximum) {auto bounded=std::to_wstring(valid?maximum:0);return DefSubclassProc(h,message,w,(LPARAM)bounded.c_str());}
+    }
+    if(message==WM_CHAR && w>=L'0' && w<=L'9' && !acceptsTimeInput(h,std::wstring(1,(wchar_t)w)))return 0;
+    if(message==WM_PASTE) {
+        std::wstring pasted;bool readable=false;
+        if(OpenClipboard(h)) {auto data=GetClipboardData(CF_UNICODETEXT);if(data) {auto value=(const wchar_t*)GlobalLock(data);if(value) {pasted=value;readable=true;GlobalUnlock(data);}}CloseClipboard();}
+        if(!readable || !acceptsTimeInput(h,pasted))return 0;
+    }
+    if(message==WM_KILLFOCUS && GetWindowTextLengthW(h)==0)SetWindowTextW(h,L"0");
+    if(message==WM_GETDLGCODE) {
+        auto code=DefSubclassProc(h,message,w,l);auto key=reinterpret_cast<MSG*>(l);
+        if(!key || (key->message==WM_KEYDOWN && key->wParam==VK_TAB))code&=~(DLGC_WANTTAB|DLGC_WANTALLKEYS);
+        if(key && key->message==WM_KEYDOWN && key->wParam==VK_RETURN)code|=DLGC_WANTMESSAGE;
+        return code;
+    }
+    if(message==WM_KEYDOWN && w==VK_RETURN) {
+        if(!(l & (1LL<<30)) && IsWindowEnabled(g_btnStart))
+            SendMessageW(GetParent(h),WM_COMMAND,MAKEWPARAM(ID_BTN_START,BN_CLICKED),(LPARAM)g_btnStart);
+        return 0;
+    }
+    if(message==WM_CHAR && (w==L'\r' || w==L'\n' || w==L'\t'))return 0;
     auto result=DefSubclassProc(h,message,w,l);
     if(message==WM_SIZE || message==WM_SETFONT) {
         RECT r{};GetClientRect(h,&r);HDC dc=GetDC(h);auto font=(HFONT)SendMessageW(h,WM_GETFONT,0,0);
@@ -913,6 +1002,7 @@ static HWND makeEdit(HWND parent, int id, int x, int y, int w, int h) {
                              S(x), S(y), S(w), S(h),
                              parent, (HMENU)(INT_PTR)id, g_hInst, nullptr);
     SetWindowSubclass(e,timeEditProc,0x812,0);
+    SendMessageW(e,EM_SETLIMITTEXT,id==ID_EDIT_DAY?3:2,0);
     SendMessageW(e, WM_SETFONT, (WPARAM)g_fontUI, TRUE);
     return e;
 }
@@ -1021,8 +1111,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             g_lastTick = now;
             if (dt < 0) dt = 0;
             if (dt > 1000) dt = 1000;      // 防止休眠唤醒后跳变
-            if(g_alarmMode) g_elapsedMs=g_totalMs-std::chrono::duration_cast<std::chrono::milliseconds>(g_alarmTarget-std::chrono::system_clock::now()).count();
-            else g_elapsedMs += dt;
+            g_elapsedMs=g_totalMs-std::clamp(g_deadlineMs-timer_session::Now(),0LL,g_totalMs);
 
             if (g_elapsedMs >= g_totalMs) {
                 finishCountdown();
@@ -1141,8 +1230,10 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             }
         } else if (id == ID_CHK_POPUP && code == BN_CLICKED) {
             g_popup = (SendMessageW(g_chkPopup, BM_GETCHECK, 0, 0) == BST_CHECKED);
+            saveSession();
         } else if ((id == ID_EDIT_DAY || id == ID_EDIT_HOUR ||
                     id == ID_EDIT_MIN || id == ID_EDIT_SEC) && code == EN_CHANGE) {
+            normalizeTimeInput((HWND)lp);
             if (g_mode == MODE_IDLE) invalidateDynamic(hwnd);
         }
         return 0;
@@ -1168,7 +1259,14 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         releaseBackBuffer();
         return 0;
 
+    case WM_RESTORE_SESSION:
+        restoreSession();return 0;
+    case WM_QUERYENDSESSION:
+        saveSession();return TRUE;
+    case WM_ENDSESSION:
+        if(wp)saveSession();return 0;
     case WM_DESTROY:
+        saveSession();
         removeTrayIcon();
         releaseBackBuffer();
         PostQuitMessage(0);

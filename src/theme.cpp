@@ -175,7 +175,7 @@ LRESULT CALLBACK Styled(HWND h,UINT m,WPARAM w,LPARAM l,UINT_PTR,DWORD_PTR) {
             PaperAt(h,dc,r);
             wchar_t text[256]{};GetWindowTextW(h,text,256);
             bool check=kind==BS_AUTOCHECKBOX || kind==BS_CHECKBOX || kind==BS_AUTORADIOBUTTON || kind==BS_RADIOBUTTON;
-            bool primary=GetDlgCtrlID(h)==300 || GetDlgCtrlID(h)==330 || GetDlgCtrlID(h)==340 || GetDlgCtrlID(h)==350 ||
+            bool primary=GetDlgCtrlID(h)==300 || GetDlgCtrlID(h)==330 || GetDlgCtrlID(h)==340 || GetDlgCtrlID(h)==350 || GetDlgCtrlID(h)==360 ||
                 wcsstr(text,L"开始") || wcsstr(text,L"停止录制") || wcsstr(text,L"开 始");
             bool enabled=IsWindowEnabled(h)!=FALSE;
             bool down=(SendMessageW(h,BM_GETSTATE,0,0)&BST_PUSHED)!=0;
@@ -287,6 +287,7 @@ void Icon(HDC dc,RECT b,int kind) {
     else if(kind==3) {for(int i=0;i<8;++i){auto s=g.Save();g.TranslateTransform(24.f,24.f);g.RotateTransform(i*45.f);g.FillRectangle(&fill,-4,-23,8,12);g.Restore(s);}
         g.FillEllipse(&fill,8,8,32,32);Gdiplus::SolidBrush hole(Gdiplus::Color(255,246,246,234));g.FillEllipse(&hole,17,17,14,14);}
     else if(kind==4) {g.FillEllipse(&fill,3,13,42,26);g.DrawLine(&light,11,26,23,26);g.DrawLine(&light,17,20,17,32);g.DrawEllipse(&light,32,20,3,3);g.DrawEllipse(&light,37,27,3,3);}
+    else if(kind==6) {g.DrawRectangle(&ink,3,8,42,32);g.DrawLine(&ink,3,17,45,17);g.DrawEllipse(&ink,17,22,14,12);g.DrawLine(&ink,27,30,34,36);}
     else if(kind==5) {for(int i=0;i<4;++i){int hh=10+i*9;g.FillRectangle(&fill,4+i*11,43-hh,6,hh);}}
     else {g.DrawRectangle(&ink,10,10,28,28);g.DrawLine(&ink,4,10,44,10);g.DrawLine(&ink,10,4,10,44);g.DrawLine(&ink,17,32,33,17);}
     g.Restore(save);

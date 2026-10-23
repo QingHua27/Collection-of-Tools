@@ -12,7 +12,7 @@ set(L src/modules/lol)
 set_property(SOURCE assets/toolbox.rc PROPERTY OBJECT_DEPENDS
   "${CMAKE_CURRENT_SOURCE_DIR}/assets/toolbox.ico;${CMAKE_CURRENT_SOURCE_DIR}/assets/tank.ico;${CMAKE_CURRENT_SOURCE_DIR}/assets/tank-paused.ico;${CMAKE_CURRENT_SOURCE_DIR}/assets/lol.ico;${CMAKE_CURRENT_SOURCE_DIR}/assets/zh-CN.ini;${CMAKE_CURRENT_SOURCE_DIR}/assets/en-US.ini;${CMAKE_CURRENT_SOURCE_DIR}/assets/alarm.wav;${CMAKE_CURRENT_SOURCE_DIR}/assets/record-shutter.wav;${CMAKE_CURRENT_SOURCE_DIR}/assets/lol-helper.lua;${CMAKE_CURRENT_SOURCE_DIR}/assets/botanical-timer-reference.png")
 add_executable(CppToolbox WIN32
-  src/main.cpp src/theme.cpp src/gateway.cpp src/ace.cpp src/ace_governor.cpp src/preview.cpp
+  src/main.cpp src/qq_optimizer.cpp src/theme.cpp src/gateway.cpp src/ace.cpp src/ace_governor.cpp src/preview.cpp
   src/screenshot_module.cpp src/recording_module.cpp src/countdown_module.cpp
   src/keepalive_module.cpp src/league_module.cpp assets/toolbox.rc
   ${S}/common.cpp ${S}/capture.cpp ${S}/annotate.cpp ${S}/overlay.cpp ${S}/ocr.cpp
@@ -28,6 +28,12 @@ target_link_libraries(CppToolbox PRIVATE
 )
 include(CTest)
 if(BUILD_TESTING)
+  add_executable(QQOptimizerTests tests/qq_optimizer_tests.cpp src/ace_governor.cpp)
+  target_include_directories(QQOptimizerTests PRIVATE src)
+  target_link_libraries(QQOptimizerTests PRIVATE advapi32)
+  add_test(NAME QQOptimizerTests COMMAND QQOptimizerTests)
+  add_executable(TimerSessionTests tests/timer_session_tests.cpp)
+  add_test(NAME TimerSessionTests COMMAND TimerSessionTests)
   add_executable(TranslationAuthTests tests/translation_auth_tests.cpp)
   target_link_libraries(TranslationAuthTests PRIVATE winhttp user32 gdi32 gdiplus shell32 ole32)
   add_test(NAME TranslationAuthTests COMMAND TranslationAuthTests)

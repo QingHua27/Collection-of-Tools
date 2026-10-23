@@ -2,6 +2,7 @@
 #include "ace.h"
 #include "preview.h"
 #include "theme.h"
+#include "qq_optimizer.h"
 #include <commctrl.h>
 #include <filesystem>
 #include <fstream>
@@ -14,16 +15,17 @@ constexpr wchar_t ClassName[] = L"CppToolbox.Main.1";
 const wchar_t* MainClass() { return testMode?L"CppToolbox.Main.Test.1":ClassName; }
 constexpr UINT TrayMessage = WM_APP + 1;
 constexpr int NavBase = 100;
-const wchar_t* Names[] = {L"截图", L"录屏", L"倒计时", L"后台保活", L"LOL 助手", L"ACE 优化"};
+const wchar_t* Names[] = {L"截图", L"录屏", L"倒计时", L"后台保活", L"LOL 助手", L"ACE 优化",L"QQ 大厅优化"};
 const wchar_t* Descriptions[] = {
     L"框选屏幕，标注、识别文字或翻译。",
     L"录制桌面、指定区域或窗口，保留声音与录制记录。",
     L"选择倒计时或定时闹钟，到点播放提示音并提醒你。",
     L"管理坦克风暴页面的后台保活。",
     L"自动接受对战确认，导出游戏内实时攻速。",
-    L"管理 ACE 的 CPU、磁盘 I/O 和内存页优先级，减少与游戏的资源争用。"
+    L"管理 ACE 的 CPU、磁盘 I/O 和内存页优先级，减少与游戏的资源争用。",
+    L"减少大厅及微端浏览器在后台的资源争用，保留游戏进程。"
 };
-HWND navigation[6]{}, content[6]{}, title{}, subtitle{}, footer{};
+HWND navigation[Count]{}, content[Count]{}, title{}, subtitle{}, footer{};
 HWND enableKeep{}, enableLeague{}, aceLaunch{}, startupButton{};
 HWND closeButton{};
 HFONT font{}, titleFont{}, smallFont{};
@@ -115,9 +117,9 @@ void Position(HWND h, int x, int y, int width, int height) {
 void Reveal(int page) {
     bool suspend=IsWindowVisible(host)!=FALSE;
     if(suspend)SendMessageW(host,WM_SETREDRAW,FALSE,0);
-    if (page >= 0 && page < 6) selected = page;
+    if (page >= 0 && page < Count) selected = page;
     SetWindowTextW(title, Names[selected]); SetWindowTextW(subtitle, Descriptions[selected]);
-    for (int i = 0; i < 6; ++i) {
+    for (int i = 0; i < Count; ++i) {
         ShowWindow(content[i], i == selected ? SW_SHOW : SW_HIDE);
         InvalidateRect(navigation[i], nullptr, FALSE);
     }
@@ -176,7 +178,7 @@ void TrayMenu() {
     HMENU menu = CreatePopupMenu();
     AppendMenuW(menu, MF_STRING, 900, L"打开工具箱");
     AppendMenuW(menu, MF_STRING, 300, L"开始截图");
-    for (int i = 1; i < 6; ++i) AppendMenuW(menu, MF_STRING, NavBase+i, Names[i]);
+    for (int i = 1; i < Count; ++i) AppendMenuW(menu, MF_STRING, NavBase+i, Names[i]);
     AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
     AppendMenuW(menu,MF_STRING,1204,L"设置关闭按钮行为…");
     AppendMenuW(menu, MF_STRING, 1203, L"退出工具箱");
@@ -188,7 +190,7 @@ void TrayMenu() {
 void Layout() {
     RECT r{}; GetClientRect(host, &r);
     const int w=MulDiv(r.right,9600,dpi*UiPercent), h=MulDiv(r.bottom,9600,dpi*UiPercent);
-    for (int i = 0; i < 6; ++i) Position(navigation[i], 10, 114+i*64, 202, 56);
+    for (int i = 0; i < Count; ++i) Position(navigation[i], 10, 114+i*64, 202, 56);
     Position(startupButton, 16, h-254, 192, 54);
     Position(closeButton,16,h-192,192,54);
     Position(GetDlgItem(host,1202), 16, h-130, 192,54);
@@ -198,13 +200,14 @@ void Layout() {
     Position(title,370,110,w-420,58); Position(subtitle,370,174,w-420,42);
     for(int id : {1205,1206}) SetWindowPos(GetDlgItem(host,id),HWND_TOP,0,0,0,0,SWP_NOMOVE|SWP_NOSIZE|SWP_NOACTIVATE);
     Position(footer,260,h-45,w-284,32);
-    for (int i=0;i<6;++i) Position(content[i],240,216,w-260,h-278);
+    for (int i=0;i<Count;++i) Position(content[i],240,216,w-260,h-278);
     Position(GetDlgItem(content[5],2501),24,164,w-266,90);
     Position(GetDlgItem(content[5],2502),24,270,w-266,h-578);
     Position(GetDlgItem(content[5],2503),24,h-288,w-266,80);
     Position(GetDlgItem(content[3],2301),24,212,w-266,350);
     Position(GetDlgItem(content[4],2402),24,194,w-266,60);
     Position(GetDlgItem(content[4],2401),24,272,w-266,360);
+    Position(GetDlgItem(content[6],2602),24,390,w-300,h-750);
     for (int i : {1,2}) {
         HWND embedded = slots[i].window.load(); RECT rc{}; GetClientRect(content[i],&rc);
         int x=0,y=0,width=rc.right,height=rc.bottom;
@@ -225,7 +228,7 @@ void BuildPages() {
     WNDCLASSW pc{}; pc.hInstance=GetModuleHandleW(nullptr); pc.lpfnWndProc=PageProc;
     pc.lpszClassName=L"CppToolbox.Page"; pc.hbrBackground=white; pc.hCursor=LoadCursorW(nullptr,IDC_ARROW);
     RegisterClassW(&pc);
-    for (int i=0;i<6;++i) {
+    for (int i=0;i<Count;++i) {
         navigation[i] = Control(host,L"BUTTON",Names[i],NavBase+i,BS_OWNERDRAW|WS_TABSTOP);
         content[i] = Control(host,L"CppToolbox.Page",L"",200+i,WS_CLIPCHILDREN);
         if (i<Count) pages[i]=content[i];
@@ -275,6 +278,18 @@ void BuildPages() {
     label(5,L"每 3 秒识别并检查 ACE / SGuard。开启后自动应用；停止或正常退出时恢复原值。\r\n内存紧张时由系统按页优先级回收，不定时强制清空工作集，以免增加回读和卡顿。",2501,164,52);
     Control(content[5],L"EDIT",L"正在检测…",2502,ES_MULTILINE|ES_READONLY|ES_AUTOVSCROLL|WS_VSCROLL|WS_BORDER);
     label(5,L"调度优先级不是 CPU/磁盘/内存硬上限；反作弊驱动 I/O 可能不受影响。\r\nI/O 计数包含缓存等访问；私有提交也不等同实际驻留内存。",2503,560,48);
+    label(6,L"QQ 游戏大厅 · 后台资源优化",2600,24,36);
+    button(6,L"启用在线模式",360,24,78,190);
+    button(6,L"整理后台内存",361,230,78,190);
+    button(6,L"立即刷新",362,436,78,130);
+    auto eco=Control(content[6],L"BUTTON",L"启用节能调度（EcoQoS）",363,BS_AUTOCHECKBOX|WS_TABSTOP);
+    Position(eco,24,132,420,30);SendMessageW(eco,BM_SETCHECK,BST_CHECKED,0);
+    auto browsers=Control(content[6],L"BUTTON",L"包含浏览器和 Flash 宿主（前台自动恢复）",364,BS_AUTOCHECKBOX|WS_TABSTOP);
+    Position(browsers,24,174,700,30);SendMessageW(browsers,BM_SETCHECK,BST_CHECKED,0);
+    auto trim=Control(content[6],L"BUTTON",L"进入后台时整理一次内存（切回可能回读）",365,BS_AUTOCHECKBOX|WS_TABSTOP);
+    Position(trim,24,216,700,30);SendMessageW(trim,BM_SETCHECK,BST_CHECKED,0);
+    label(6,L"后台降低调度，坦克风暴每 15 秒保活；不暂停进程或断网。\r\n切回大厅或游戏前台时恢复；停止、退出时也恢复原设置。\r\n内存仅在进入后台时整理一次，可关闭；不等于固定占用上限。",2601,264,110);
+    Control(content[6],L"EDIT",L"正在检测…",2602,ES_MULTILINE|ES_READONLY|ES_AUTOVSCROLL|WS_VSCROLL|WS_BORDER);
 }
 void TestCheck(bool okay,const char* name) {
     testResults.emplace_back(std::string(okay?"PASS ":"FAIL ")+name);
@@ -299,6 +314,8 @@ void TickTest() {
         TestCheck(GetParent(slots[Countdown].window)==content[Countdown],"countdown page embedded");
         TestCheck(EmbeddedLua().size()>10000 && EmbeddedLua().find(L"EnablePrimaryModify")!=std::wstring::npos,"embedded Lua resource decodes completely");
         TestCheck(IsWindow(GetDlgItem(content[League],345)),"copy Lua action available");
+        TestCheck(IsWindow(GetDlgItem(content[QQOptimizer],360)) && SendMessageW(GetDlgItem(content[QQOptimizer],364),BM_GETCHECK,0,0)==BST_CHECKED,"QQ background online mode includes browser with foreground restoration");
+        if(!qqEcoSupported)TestCheck(!IsWindowEnabled(GetDlgItem(content[QQOptimizer],363)) && SendMessageW(GetDlgItem(content[QQOptimizer],363),BM_GETCHECK,0,0)==BST_UNCHECKED,"unsupported EcoQoS is disabled without modifying unknown original state");
         SendMessageW(navigation[Countdown],WM_MOUSEMOVE,0,MAKELPARAM(5,5));
         TestCheck(theme::Hovered(navigation[Countdown]),"navigation hover feedback enters");
         SendMessageW(navigation[Countdown],WM_MOUSELEAVE,0,0);
@@ -308,7 +325,7 @@ void TickTest() {
         SendMessageW(host,WM_CHANGEUISTATE,MAKEWPARAM(UIS_CLEAR,UISF_HIDEFOCUS),0);
         TestCheck((SendMessageW(navigation[Countdown],WM_QUERYUISTATE,0,0)&UISF_HIDEFOCUS)==0,"keyboard focus decoration available");
         unsigned backgroundBefore=theme::BackgroundBuilds();
-        for(int i=0;i<6;++i) {
+        for(int i=0;i<Count;++i) {
             Reveal(i); TestCheck((GetWindowLongPtrW(content[i],GWL_STYLE)&WS_VISIBLE)!=0,"page navigation");
             if(previews) {
                 ShowWindow(host,SW_SHOWNOACTIVATE); UpdateWindow(host);
@@ -384,7 +401,7 @@ void TickTest() {
 }
 void Command(int id) {
     if(closing) return;
-    if(id>=NavBase && id<NavBase+6) { ShowHost(id-NavBase); return; }
+    if(id>=NavBase && id<NavBase+Count) { ShowHost(id-NavBase); return; }
     switch(id) {
     case 900: ShowHost(); break;
     case 300: ShowWindow(host,SW_HIDE); SetTimer(host,3,180,nullptr); break;
@@ -413,6 +430,12 @@ void Command(int id) {
             restartElevated=true; RequestClose();
         } else Send(AceOptimizer,Primary);
         break;
+    case 360: Send(QQOptimizer,Primary); break;
+    case 361: Send(QQOptimizer,Secondary); break;
+    case 362: Send(QQOptimizer,Rescan); break;
+    case 363: Send(QQOptimizer,Configure); break;
+    case 364: Send(QQOptimizer,MemoryOption); break;
+    case 365: Send(QQOptimizer,IoOption); break;
     case 351: Send(AceOptimizer,Secondary); break;
     case 352: if(!IsElevated() && !testMode) { restartElevated=true; RequestClose(); } break;
     case 353: Send(AceOptimizer,Configure); break;
@@ -473,7 +496,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd,UINT message,WPARAM w,LPARAM l) {
     }
     case WM_DRAWITEM: {
         auto d=reinterpret_cast<DRAWITEMSTRUCT*>(l);
-        if(d->CtlID<NavBase || d->CtlID>=NavBase+6) break;
+        if(d->CtlID<NavBase || d->CtlID>=NavBase+Count) break;
         bool active=(static_cast<int>(d->CtlID)-NavBase)==selected;
         theme::PaintSurface(navigation[d->CtlID-NavBase],d->hDC,d->rcItem);
         bool pressed=(d->itemState&ODS_SELECTED)!=0;
@@ -537,6 +560,15 @@ LRESULT CALLBACK WindowProc(HWND hwnd,UINT message,WPARAM w,LPARAM l) {
         std::unique_ptr<State> state(reinterpret_cast<State*>(l));
         if(status[state->module]==state->text) return 0;
         status[state->module]=state->text;
+        if(state->module==QQOptimizer) {
+            SetWindowTextW(GetDlgItem(content[6],2602),state->text.c_str());
+            if(!qqEcoSupported) {
+                auto eco=GetDlgItem(content[6],363);SetWindowTextW(eco,L"节能调度：当前系统不支持");
+                SendMessageW(eco,BM_SETCHECK,BST_UNCHECKED,0);EnableWindow(eco,FALSE);
+            }
+            bool active=state->text.find(L"后台优化已开启")!=std::wstring::npos || state->text.find(L"前台使用中")!=std::wstring::npos;
+            SetWindowTextW(GetDlgItem(content[6],360),active?L"停止优化并恢复":L"启用在线模式");
+        }
         if(state->module==KeepAlive) SetWindowTextW(GetDlgItem(content[3],2301),state->text.c_str());
         if(state->module==League) SetWindowTextW(GetDlgItem(content[4],2401),state->text.c_str());
         if(state->module==AceOptimizer) {
@@ -614,7 +646,7 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR command,int) {
         if(!host) { CloseHandle(mutex); return 2; }
         BuildPages(); theme::Apply(host); Layout(); Reveal(wcsstr(command,L"--ace-page")?5:0);
         taskbarCreated=RegisterWindowMessageW(L"TaskbarCreated"); AddTray();
-        Start(Screenshot); Start(Recording); Start(Countdown); Start(AceOptimizer);
+        Start(Screenshot); Start(Recording); Start(Countdown); Start(AceOptimizer); Start(QQOptimizer);
         keepEnabled=testMode || GetPrivateProfileIntW(L"modules",L"keepalive",0,Ini().c_str())!=0;
         leagueEnabled=testMode || GetPrivateProfileIntW(L"modules",L"league",0,Ini().c_str())!=0;
         if(keepEnabled) { Start(KeepAlive); SetWindowTextW(enableKeep,L"关闭后台保活"); }

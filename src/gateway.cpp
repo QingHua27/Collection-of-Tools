@@ -1,4 +1,5 @@
 #include "gateway.h"
+#include "qq_optimizer.h"
 #include <filesystem>
 #include <mutex>
 #include <fstream>
@@ -104,6 +105,7 @@ void Start(Module id) {
             case KeepAlive: RunKeepAlive(); break;
             case League: RunLeague(); break;
             case AceOptimizer: RunAce(); break;
+            case QQOptimizer: RunQQOptimizer(); break;
             default: break;
             }
         } catch (const std::exception& e) {

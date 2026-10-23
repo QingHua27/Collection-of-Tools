@@ -8,8 +8,8 @@
 #include <functional>
 
 namespace toolbox {
-enum Module : int { Screenshot, Recording, Countdown, KeepAlive, League, AceOptimizer, Count };
-enum Action : int { Refresh, Primary, Secondary, Configure, Stop, TestCountdown, TestRecording, TestRecordingStop, IoOption, MemoryOption, HotkeyFirst=100 };
+enum Module : int { Screenshot, Recording, Countdown, KeepAlive, League, AceOptimizer, QQOptimizer, Count };
+enum Action : int { Refresh, Primary, Secondary, Configure, Stop, TestCountdown, TestRecording, TestRecordingStop, IoOption, MemoryOption, Rescan, HotkeyFirst=100 };
 extern std::atomic<int> screenshotPreset;
 extern std::atomic<bool> screenshotSelectionVerified;
 const wchar_t* ScreenshotPresetName(int index);
